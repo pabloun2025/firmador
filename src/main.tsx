@@ -4,10 +4,12 @@ import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import "./styles.css";
 import "./round.css";
+import "./redesign.css";
 
 type IconName =
   | "arrow"
   | "check"
+  | "chevron"
   | "clock"
   | "download"
   | "eye"
@@ -28,6 +30,7 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   check: <path d="m5 12 4 4L19 7" />,
+  chevron: <path d="m8 10 4 4 4-4" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="8" />
@@ -156,19 +159,8 @@ function DocumentArt() {
     <figure className="document-art">
       <img
         src="/leapsign-secure-flow.png"
-        alt="Tres versiones de un documento avanzan de forma protegida, acompañadas por una rana geométrica en movimiento"
+        alt="Una rana avanza entre las versiones protegidas de un documento"
       />
-      <figcaption>
-        <span>
-          <Icon name="lock" size={16} /> Acceso privado
-        </span>
-        <span>
-          <Icon name="refresh" size={16} /> Una versión vigente
-        </span>
-        <span>
-          <Icon name="shield" size={16} /> Control del creador
-        </span>
-      </figcaption>
     </figure>
   );
 }
@@ -614,10 +606,14 @@ function RoundAccess({ id }: { id: string }) {
           <span className="file-chip">
             <Icon name="file" size={14} /> Documento privado
           </span>
-          <h1>Documento para firmar</h1>
+          <h1>Abre el documento</h1>
+          <p className="round-lead">
+            Introduce la clave que te facilitó el creador. Si tu enlace es
+            personal, podrás continuar directamente.
+          </p>
           <form onSubmit={openRound}>
             <label>
-              Clave de acceso <em>Si aplica</em>
+              Clave de acceso <em>Solo si te la solicitaron</em>
               <input
                 type="password"
                 value={key}
@@ -626,10 +622,10 @@ function RoundAccess({ id }: { id: string }) {
               />
             </label>
             <button className="primary wide" disabled={busy}>
-              Continuar
+              {busy ? "Abriendo…" : "Abrir documento"}
             </button>
+            <Notice message={notice} tone={noticeTone} />
           </form>
-          <Notice message={notice} tone={noticeTone} />
         </section>
       </main>
     );
@@ -641,10 +637,10 @@ function RoundAccess({ id }: { id: string }) {
           <span className="file-chip success">
             <Icon name="check" size={14} /> Incorporado
           </span>
-          <h1>Documento enviado</h1>
+          <h1>Tu firma ya forma parte del documento</h1>
           <p>
-            Tu versión quedó guardada. El siguiente turno se habilitará
-            automáticamente.
+            El PDF firmado se guardó correctamente. El proceso continuará con
+            la siguiente persona.
           </p>
         </section>
       </main>
@@ -677,9 +673,10 @@ function RoundAccess({ id }: { id: string }) {
           <span className="file-chip success">
             <Icon name="clock" size={14} /> Tu turno
           </span>
+          <p className="round-context">Documento</p>
           <h1>{round.title}</h1>
           <div className="turn-timer">
-            <small>Tiempo restante</small>
+            <small>Tiempo disponible para completar tu turno</small>
             <strong>
               {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
               {String(secondsLeft % 60).padStart(2, "0")}
@@ -687,87 +684,102 @@ function RoundAccess({ id }: { id: string }) {
             <span>El turno vence si no finalizas dentro de este tiempo.</span>
           </div>
           <div className="signing-step">
-            <h2>Firma en tres pasos</h2>
-            <ol className="flow-steps">
-              <li>
-                <span>
+            <div className="task-heading">
+              <span className="eyebrow">Tu tarea</span>
+              <h2>Firma el documento en tres pasos</h2>
+              <p>Descarga el PDF, fírmalo fuera de LeapSign y súbelo de nuevo.</p>
+            </div>
+            <ol className="signer-tasks">
+              <li className="signer-task">
+                <span className="task-number">1</span>
+                <div className="task-content">
+                  <span className="task-icon">
                   <Icon name="download" />
-                </span>
-                <div>
-                  <strong>Descarga</strong>
-                  <small>Obtén la versión vigente.</small>
+                  </span>
+                  <div className="task-copy">
+                    <h3>Descarga el documento</h3>
+                    <p>Guarda la versión vigente en tu dispositivo.</p>
+                  </div>
+                  <a
+                    className="primary task-action"
+                    href={turn.pdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                  >
+                    <Icon name="download" size={18} /> Descargar PDF
+                  </a>
                 </div>
               </li>
-              <li>
-                <span>
-                  <FrogMark />
-                </span>
-                <div>
-                  <strong>Firma</strong>
-                  <small>Utiliza FirmaEC o Adobe.</small>
+              <li className="signer-task">
+                <span className="task-number">2</span>
+                <div className="task-content">
+                  <span className="task-icon frog-task-icon"><FrogMark /></span>
+                  <div className="task-copy">
+                    <h3>Firma el PDF</h3>
+                    <p>
+                      Ábrelo en FirmaEC, Adobe Acrobat u otra herramienta de
+                      firma. Conserva el archivo en formato PDF.
+                    </p>
+                  </div>
                 </div>
               </li>
-              <li>
-                <span>
-                  <Icon name="upload" />
-                </span>
-                <div>
-                  <strong>Incorpora</strong>
-                  <small>Sube el mismo PDF firmado.</small>
+              <li className="signer-task active-task">
+                <span className="task-number">3</span>
+                <div className="task-content">
+                  <span className="task-icon"><Icon name="upload" /></span>
+                  <div className="task-copy">
+                    <h3>Sube el PDF firmado</h3>
+                    <p>Vuelve a LeapSign y selecciona el archivo que acabas de firmar.</p>
+                  </div>
+                  <label className={`upload ${signedDocument ? "has-file" : ""}`}>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => setSignedDocument(e.target.files?.[0] ?? null)}
+                    />
+                    <span className="upload-icon">
+                      <Icon name="upload" />
+                    </span>
+                    <span>
+                      <strong>
+                        {signedDocument
+                          ? signedDocument.name
+                          : "Seleccionar PDF firmado"}
+                      </strong>
+                      <small>
+                        {signedDocument
+                          ? `${Math.ceil(signedDocument.size / 1024)} KB`
+                          : "PDF · máximo 10 MB"}
+                      </small>
+                    </span>
+                  </label>
+                  <label className="review-check">
+                    <input
+                      type="checkbox"
+                      checked={reviewedPrevious}
+                      onChange={(e) => setReviewedPrevious(e.target.checked)}
+                    />
+                    <span>
+                      <strong>He revisado el documento</strong>
+                      <small>Confirmo que firmé la copia correcta antes de enviarla.</small>
+                    </span>
+                  </label>
+                  <button
+                    className="primary wide"
+                    onClick={submitSignedVersion}
+                    disabled={busy}
+                  >
+                    {busy ? "Subiendo PDF…" : "Subir PDF firmado y completar mi turno"}
+                  </button>
+                  {noticeTarget === "submission" && (
+                    <Notice message={notice} tone={noticeTone} />
+                  )}
                 </div>
               </li>
             </ol>
-            <a
-              className="primary"
-              href={turn.pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-              download
-            >
-              <Icon name="download" size={18} /> Descargar documento a firmar
-            </a>
-            <label className={`upload ${signedDocument ? "has-file" : ""}`}>
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={(e) => setSignedDocument(e.target.files?.[0] ?? null)}
-              />
-              <span className="upload-icon">
-                <Icon name="upload" />
-              </span>
-              <span>
-                <strong>
-                  {signedDocument
-                    ? signedDocument.name
-                    : "Seleccionar el PDF firmado"}
-                </strong>
-                <small>
-                  {signedDocument
-                    ? `${Math.ceil(signedDocument.size / 1024)} KB`
-                    : "Solo la copia descargada y firmada · máximo 10 MB"}
-                </small>
-              </span>
-            </label>
-            <label className="review-check">
-              <input
-                type="checkbox"
-                checked={reviewedPrevious}
-                onChange={(e) => setReviewedPrevious(e.target.checked)}
-              />
-              Confirmo que el documento que descargué era correcto.
-            </label>
-            <button
-              className="primary wide"
-              onClick={submitSignedVersion}
-              disabled={busy}
-            >
-              {busy ? "Incorporando…" : "Incorporar PDF firmado y continuar →"}
-            </button>
-            {noticeTarget === "submission" && (
-              <Notice message={notice} tone={noticeTone} />
-            )}
           </div>
-          <button className="text-button" onClick={release} disabled={busy}>
+          <button className="text-button release-turn" onClick={release} disabled={busy}>
             {busy ? "Liberando…" : "Liberar turno sin firmar"}
           </button>
           {noticeTarget === "release" && (
@@ -776,16 +788,15 @@ function RoundAccess({ id }: { id: string }) {
           <aside className="scope-note">
             <Icon name="shield" size={18} />
             <p>
-              <strong>Antes de firmar.</strong> Comprueba que este sea el PDF
-              correcto y fírmalo con una herramienta de confianza. LeapSign
-              mantiene el orden de las versiones, pero no sustituye la
-              verificación de identidad o de la firma.
+              LeapSign mantiene el orden de las versiones. La identidad y la
+              validez de la firma deben comprobarse con la herramienta de firma
+              correspondiente.
             </p>
           </aside>
-          <fieldset className="issue-box">
-            <legend>
-              Informar una incidencia <em>Detiene el proceso</em>
-            </legend>
+          <details className="issue-disclosure">
+            <summary>¿Hay un problema con el documento?</summary>
+            <fieldset className="issue-box">
+            <legend>Informar una incidencia <em>Detendrá el proceso</em></legend>
             <label>
               Motivo
               <select
@@ -821,7 +832,8 @@ function RoundAccess({ id }: { id: string }) {
             {noticeTarget === "issue" && (
               <Notice message={notice} tone={noticeTone} />
             )}
-          </fieldset>
+            </fieldset>
+          </details>
           {noticeTarget !== "submission" && noticeTarget !== "release" && noticeTarget !== "issue" && (
             <Notice message={notice} tone={noticeTone} />
           )}
@@ -837,6 +849,10 @@ function RoundAccess({ id }: { id: string }) {
         </span>
         <h1>{round.title}</h1>
         {round.message && <p>{round.message}</p>}
+        <div className="round-instruction">
+          <strong>Solicita tu turno</strong>
+          <span>Cuando te corresponda, podrás descargar el PDF y subirlo firmado.</span>
+        </div>
         <label>
           Tu nombre
           <input
@@ -856,14 +872,14 @@ function RoundAccess({ id }: { id: string }) {
         </label>
         {turn?.state === "waiting" && (
           <p className="queue">
-            Estás en espera · posición {turn.position}. Te avisaremos por correo
-            si lo indicaste; también comprobamos tu turno automáticamente.
+            <strong>Estás en la cola · posición {turn.position}</strong>
+            <span>Esta página comprueba tu turno automáticamente. Si indicaste tu correo, también recibirás un aviso.</span>
           </p>
         )}
         <button className="primary wide" onClick={takeTurn} disabled={busy}>
           {turn?.state === "waiting"
-            ? "Comprobar turno"
-            : "Tomar turno para firmar"}
+            ? "Comprobar si ya es mi turno"
+            : busy ? "Solicitando turno…" : "Solicitar turno para firmar"}
         </button>
         <Notice message={notice} tone={noticeTone} />
       </section>
@@ -1013,7 +1029,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
   return (
     <div className="invitation-composer">
       <h4>Invitar por correo</h4>
-      <p>Añade hasta 25 personas. Cada enlace es privado y registra a su destinatario en la cola.</p>
+      <p>Añade las personas que deben firmar. Cada una recibirá un enlace personal para entrar en la cola.</p>
       <div className="invite-list">
         {drafts.map((draft, index) => (
           <div className="invite-person" key={draft.id}>
@@ -1033,8 +1049,8 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
         <button type="button" className="signout" disabled={busy || drafts.length >= 25} onClick={() => setDrafts((current) => [...current, emptyInvite()])}>+ Añadir otra persona</button>
         <button type="button" className="primary" disabled={busy || !pending.length} onClick={() => send(pending, "drafts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : pending.length === 1 ? "Enviar 1 invitación" : `Enviar ${pending.length} invitaciones`}</button>
       </div>
-      {savedContacts.length > 0 && <div className="contact-picker">
-        <div className="contact-picker-head"><strong>Contactos frecuentes</strong><span>{chosen.length} seleccionado{chosen.length === 1 ? "" : "s"}</span></div>
+      {savedContacts.length > 0 && <details className="contact-picker">
+        <summary><span>Elegir contactos frecuentes</span><small>{chosen.length ? `${chosen.length} seleccionado${chosen.length === 1 ? "" : "s"}` : `${savedContacts.length} guardado${savedContacts.length === 1 ? "" : "s"}`}</small><Icon name="chevron" size={17} /></summary>
         <div className="contact-sort">
           <label>Ordenar por<select value={contactSort} onChange={(event) => { setContactSort(event.target.value as "name" | "email"); setContactPage(0); }}><option value="name">Nombre</option><option value="email">Correo</option></select></label>
           <span>{sortedContacts.length} contacto{sortedContacts.length === 1 ? "" : "s"}</span>
@@ -1051,7 +1067,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
         </div>)}</div>
         {contactPageCount > 1 && <div className="contact-pagination"><button type="button" className="text-button" disabled={contactPage === 0} onClick={() => setContactPage((page) => page - 1)}>Anterior</button><span>Página {contactPage + 1} de {contactPageCount}</span><button type="button" className="text-button" disabled={contactPage + 1 >= contactPageCount} onClick={() => setContactPage((page) => page + 1)}>Siguiente</button></div>}
         <button type="button" className="primary selected-send" disabled={busy || !chosen.length} onClick={() => send(savedContacts.filter((contact) => chosen.includes(contact.id)).map((contact) => ({ email: contact.email, name: contact.display_name || "", saveContact: true })), "contacts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : `Enviar a ${chosen.length} marcado${chosen.length === 1 ? "" : "s"}`}</button>
-      </div>}
+      </details>}
       {message && <Notice message={message} tone={messageTone} />}
     </div>
   );
@@ -1170,6 +1186,12 @@ function OwnerPanel() {
           : status === "cancelled"
             ? "Cancelado"
             : status;
+  const currentVersion = selected?.versions.find(
+    (version: any) => version.id === selected.workflow.current_version_id,
+  );
+  const previousVersions = selected?.versions.filter(
+    (version: any) => version.id !== selected.workflow.current_version_id,
+  ) ?? [];
   useEffect(() => {
     void loadRounds();
   }, []);
@@ -1177,11 +1199,9 @@ function OwnerPanel() {
     <section className="owner-panel">
       <div className="owner-panel-head">
         <div>
-          <h2>Seguimiento</h2>
-          <p>
-            Abre un proceso para ver la cola, el turno y las versiones del
-            documento.
-          </p>
+          <span className="section-kicker">Actividad</span>
+          <h2>Mis documentos</h2>
+          <p>Consulta el estado de cada proceso y gestiona sus firmas.</p>
         </div>
         <button className="signout" onClick={loadRounds}>
           <Icon name="refresh" size={16} /> Actualizar
@@ -1200,11 +1220,14 @@ function OwnerPanel() {
                 <span>
                   <strong>{round.title}</strong>
                   <small>
-                    {statusText(round.status)} · creado{" "}
-                    {new Date(round.created_at).toLocaleDateString()}
+                    Creado el {new Date(round.created_at).toLocaleDateString()}
                   </small>
                 </span>
-                <span>{round.signature_count} firmas</span>
+                <span className="round-list-meta">
+                  <span className={`status-badge status-${round.status}`}>{statusText(round.status)}</span>
+                  <small>{round.signature_count} {round.signature_count === 1 ? "firma" : "firmas"}</small>
+                  <strong className="open-label">Gestionar <Icon name="arrow" size={14} /></strong>
+                </span>
               </button>
               <button
                 className="trash-button"
@@ -1222,8 +1245,9 @@ function OwnerPanel() {
         <div className="owner-detail">
           <div className="owner-detail-top">
             <div>
+              <span className={`status-badge status-${selected.workflow.status}`}>{statusText(selected.workflow.status)}</span>
               <h3>{selected.workflow.title}</h3>
-              <p>{statusText(selected.workflow.status)}</p>
+              <p>{selected.workflow.signature_count} {selected.workflow.signature_count === 1 ? "firma incorporada" : "firmas incorporadas"}</p>
             </div>
             <div className="owner-actions">
               {selected.workflow.status === "active" ? (
@@ -1231,14 +1255,14 @@ function OwnerPanel() {
                   className="signout"
                   onClick={() => manageRound("pause")}
                 >
-                  Detener
+                  Detener proceso
                 </button>
               ) : selected.workflow.status === "paused_error" ? (
                 <button
                   className="signout"
                   onClick={() => manageRound("resume")}
                 >
-                  Reanudar
+                  Reanudar proceso
                 </button>
               ) : null}
               {selected.activeTurn && (
@@ -1246,7 +1270,7 @@ function OwnerPanel() {
                   className="signout"
                   onClick={() => manageRound("release_turn")}
                 >
-                  Liberar turno
+                  Liberar turno actual
                 </button>
               )}
               {selected.queue.length > 0 && (
@@ -1254,11 +1278,11 @@ function OwnerPanel() {
                   className="signout"
                   onClick={() => manageRound("skip_next")}
                 >
-                  Saltar siguiente
+                  Retirar primera espera
                 </button>
               )}
               <button className="signout" onClick={() => downloadVersion()}>
-                <Icon name="download" size={16} /> Descargar actual
+                <Icon name="download" size={16} /> Descargar PDF actual
               </button>
               <button
                 className="danger-button"
@@ -1270,122 +1294,143 @@ function OwnerPanel() {
           </div>
           <dl>
             <div>
-              <dt>Documento actual</dt>
+              <dt>Versión vigente</dt>
               <dd>
                 Versión{" "}
-                {selected.versions.find(
-                  (version: any) =>
-                    version.id === selected.workflow.current_version_id,
-                )?.sequence ?? 0}
+                {currentVersion?.sequence ?? 0}
               </dd>
             </div>
             <div>
-              <dt>Quién lo tiene</dt>
+              <dt>Turno actual</dt>
               <dd>
                 {selected.activeTurn
                   ? `${selected.activeTurn.holder_name}${selected.activeTurn.holder_email ? ` · ${selected.activeTurn.holder_email}` : ""} · hasta ${new Date(selected.activeTurn.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                  : "Disponible"}
+                  : "Sin turno activo · disponible"}
               </dd>
             </div>
             <div>
-              <dt>En espera</dt>
+              <dt>Personas en espera</dt>
               <dd>
                 {selected.queue.length
-                  ? selected.queue
-                      .map(
-                        (item: any) =>
-                          `${item.holder_name}${item.email ? ` · ${item.email}` : ""}`,
-                      )
-                      .join(", ")
-                  : "Nadie"}
+                  ? `${selected.queue.length} en la cola`
+                  : "Sin personas esperando"}
               </dd>
             </div>
           </dl>
+          <section className="signature-queue" aria-labelledby="queue-title">
+            <div className="subsection-heading">
+              <div>
+                <span className="section-kicker">Orden de acceso</span>
+                <h4 id="queue-title">Cola de firmas</h4>
+              </div>
+              <span>{selected.workflow.signature_count} completada{selected.workflow.signature_count === 1 ? "" : "s"}</span>
+            </div>
+            <ol>
+              {selected.activeTurn ? (
+                <li className="queue-current">
+                  <span className="queue-marker"><Icon name="clock" size={16} /></span>
+                  <span><strong>{selected.activeTurn.holder_name}</strong><small>Firmando ahora{selected.activeTurn.holder_email ? ` · ${selected.activeTurn.holder_email}` : ""}</small></span>
+                  <span className="queue-state">Turno actual</span>
+                </li>
+              ) : (
+                <li className="queue-available">
+                  <span className="queue-marker"><Icon name="check" size={16} /></span>
+                  <span><strong>Documento disponible</strong><small>No hay un turno activo en este momento.</small></span>
+                </li>
+              )}
+              {selected.queue.map((item: any, index: number) => (
+                <li key={item.id || `${item.holder_name}-${index}`}>
+                  <span className="queue-marker">{index + 1}</span>
+                  <span><strong>{item.holder_name}</strong><small>{item.email || "En espera"}</small></span>
+                  <span className="queue-state">En espera</span>
+                </li>
+              ))}
+            </ol>
+          </section>
           {selected.workflow.status === "active" && <section className="share-round">
-            <h4>Compartir e invitar</h4>
-            <p>Este enlace seguirá disponible mientras el proceso acepte firmas.</p>
-            <div className="share-url"><input readOnly value={`${window.location.origin}/r/${selected.workflow.id}`} aria-label="Enlace compartible" /><button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/r/${selected.workflow.id}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button></div>
+            <div className="subsection-heading">
+              <div>
+                <span className="section-kicker">Participantes</span>
+                <h4>Compartir e invitar firmantes</h4>
+                <p>Comparte el acceso general o envía invitaciones personales por correo.</p>
+              </div>
+            </div>
+            <div className="share-url"><input readOnly value={`${window.location.origin}/r/${selected.workflow.id}`} aria-label="Enlace para solicitar un turno de firma" /><button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/r/${selected.workflow.id}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button></div>
+            <p className="share-help">El enlace estará disponible mientras el proceso siga en curso.</p>
             <InvitationComposer workflowId={selected.workflow.id} contacts={selected.contacts ?? []} onSent={() => { void openRound(selected.workflow.id); }} />
           </section>}
-          <h4>Historial de versiones</h4>
-          <aside className="retention-note">
-            <Icon name="clock" size={18} />
-            <div>
-              <strong>Plazos del proceso</strong>
-              <p>El turno de firma dura 10 minutos y cada invitación privada caduca a los 30 días o al completar su firma. Las versiones históricas solo se conservan durante la revisión: al aceptar la versión final o descartar parte del historial, dejan de estar disponibles de inmediato y su eliminación técnica se completa en un máximo de 48 horas.</p>
+          <section className="version-section" aria-labelledby="current-version-title">
+            <div className="subsection-heading">
+              <div>
+                <span className="section-kicker">Archivo vigente</span>
+                <h4 id="current-version-title">Versión actual</h4>
+              </div>
+              <button className="signout" onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar PDF actual</button>
             </div>
-          </aside>
-          <ul className="submission-list">
-            {selected.versions.map((version: any) => (
-              <li key={version.id}>
+            {currentVersion && <article className="current-version-card">
+              <div className="version-summary">
                 <strong>
-                  Versión {version.sequence}
-                  {version.id === selected.workflow.current_version_id
-                    ? " · actual"
-                    : ""}
+                  Versión {currentVersion.sequence}
                 </strong>
                 <span>
-                  {Math.ceil(version.byte_size / 1024)} KB ·{" "}
-                  {new Date(version.created_at).toLocaleString()}
+                  {Math.ceil(currentVersion.byte_size / 1024)} KB · {new Date(currentVersion.created_at).toLocaleString()}
                 </span>
                 <span className="version-author">
-                  Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>
-                  {version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}
+                  Cargada por <strong>{currentVersion.submitted_by_name || (currentVersion.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>
+                  {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
                 </span>
-                <div className="version-actions">
-                  <button
-                    className="text-button"
-                    onClick={() => downloadVersion(version.id)}
-                  >
-                    Descargar
-                  </button>
-                  {version.id !== selected.workflow.current_version_id && (
-                    <button
-                      className="text-button"
-                      onClick={() => manageRound("rollback", version.id)}
-                    >
-                      Volver a esta versión
-                    </button>
-                  )}
-                </div>
-                {version.id === selected.workflow.current_version_id &&
-                  selected.workflow.status !== "completed" && (
-                    <div className="final-approval">
-                      <div className="final-approval-title">
-                        <span>
-                          <Icon name="check" size={17} />
-                        </span>
-                        <div>
-                          <strong>¿Esta es la versión definitiva?</strong>
-                          <p>
-                            Descárgala y revísala antes de cerrar el proceso.
-                            Después no podrán añadirse más firmas.
-                          </p>
-                        </div>
-                      </div>
-                      <label className="final-confirm">
-                        <input
-                          type="checkbox"
-                          checked={finalConfirmed}
-                          onChange={(event) =>
-                            setFinalConfirmed(event.target.checked)
-                          }
-                        />
-                        He revisado el PDF y confirmo que esta será la versión
-                        final.
-                      </label>
-                      <button
-                        className="primary final-button"
-                        disabled={!finalConfirmed}
-                        onClick={() => manageRound("finalize", version.id)}
-                      >
-                        Aceptar versión final y cerrar
-                      </button>
+              </div>
+              {selected.workflow.status !== "completed" && (
+                <div className="final-approval">
+                  <div className="final-approval-title">
+                    <span><Icon name="check" size={17} /></span>
+                    <div>
+                      <strong>Cerrar el proceso con esta versión</strong>
+                      <p>Descarga y revisa el PDF antes de aceptarlo. Después no podrán añadirse más firmas.</p>
                     </div>
-                  )}
-              </li>
-            ))}
-          </ul>
+                  </div>
+                  <label className="final-confirm">
+                    <input
+                      type="checkbox"
+                      checked={finalConfirmed}
+                      onChange={(event) => setFinalConfirmed(event.target.checked)}
+                    />
+                    <span><strong>He revisado el PDF</strong><small>Confirmo que esta será la versión final del documento.</small></span>
+                  </label>
+                  <button
+                    className="primary final-button"
+                    disabled={!finalConfirmed}
+                    onClick={() => manageRound("finalize", currentVersion.id)}
+                  >
+                    Aceptar versión final y cerrar el proceso
+                  </button>
+                </div>
+              )}
+            </article>}
+            <aside className="retention-note">
+              <Icon name="clock" size={18} />
+              <div>
+                <strong>Conservación y plazos</strong>
+                <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a los 30 días o al completar la firma. Las copias descartadas dejan de estar disponibles de inmediato y su eliminación técnica se completa en un máximo de 48 horas.</p>
+              </div>
+            </aside>
+            {previousVersions.length > 0 && <details className="history-disclosure">
+              <summary>Versiones anteriores <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
+              <ul className="submission-list">
+                {previousVersions.map((version: any) => (
+                  <li key={version.id}>
+                    <strong>Versión {version.sequence}</strong>
+                    <span>{Math.ceil(version.byte_size / 1024)} KB · {new Date(version.created_at).toLocaleString()}</span>
+                    <span className="version-author">Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}</span>
+                    <div className="version-actions">
+                      <button className="text-button" onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
+                      <button className="text-button" onClick={() => manageRound("rollback", version.id)}>Recuperar esta versión</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </details>}
+          </section>
           {selected.reports.length > 0 && (
             <>
               <h4>Incidencias</h4>
@@ -1605,8 +1650,8 @@ function App() {
         <div className="auth-grid">
           <section className="welcome">
             <DocumentArt />
-            <span className="eyebrow">Acceso protegido</span>
-            <h1>Recupera tu espacio.</h1>
+            <span className="eyebrow">Recuperación de acceso</span>
+            <h1>Crea una contraseña nueva.</h1>
             <p>
               Crea una contraseña nueva para volver a gestionar tus documentos.
             </p>
@@ -1645,10 +1690,10 @@ function App() {
           <section className="welcome">
             <DocumentArt />
             <span className="eyebrow">Firma secuencial de documentos</span>
-            <h1>Una firma a la vez. Una sola versión vigente.</h1>
+            <h1>Organiza la firma de un PDF.</h1>
             <p>
-              Comparte un PDF, organiza los turnos y conserva el control del
-              proceso desde un único lugar.
+              Comparte el documento, asigna los turnos y mantén una única
+              versión vigente durante todo el proceso.
             </p>
           </section>
           <section className="login-card">
@@ -1729,9 +1774,9 @@ function App() {
       <Brand />
       <div className="workspace-head">
         <div>
-          <span className="eyebrow">Panel de control</span>
-          <h1>Tus documentos, en orden.</h1>
-          <p>Sesión iniciada como {session.user.email}</p>
+          <span className="eyebrow">Espacio de trabajo</span>
+          <h1>Documentos para firmar</h1>
+          <p>{session.user.email}</p>
         </div>
         <button
           className="signout"
@@ -1742,36 +1787,18 @@ function App() {
           Salir
         </button>
       </div>
-      <div className="workspace-intro">
-        <div>
-          <Icon name="file" />
-          <span>
-            <strong>Una versión vigente</strong>
-            <small>Evita copias cruzadas durante la firma.</small>
-          </span>
-        </div>
-        <div>
-          <Icon name="users" />
-          <span>
-            <strong>Un turno cada vez</strong>
-            <small>Cada persona recibe el PDF cuando corresponde.</small>
-          </span>
-        </div>
-        <div>
-          <Icon name="shield" />
-          <span>
-            <strong>Control del creador</strong>
-            <small>Detén, recupera o finaliza el proceso.</small>
-          </span>
-        </div>
-      </div>
       <section className="create-card">
+        <header className="create-card-head">
+          <span className="section-kicker">Nuevo proceso</span>
+          <h2>Nuevo documento para firmar</h2>
+          <p>Sube el PDF que necesitas enviar a otras personas para su firma.</p>
+        </header>
         <div className="form-section">
           <div className="step-title">
             <span>1</span>
             <div>
-              <h2>Documento</h2>
-              <p>PDF de hasta 10 MB</p>
+              <h3>Prepara el documento</h3>
+              <p>Añade un nombre reconocible y selecciona un PDF de hasta 10 MB.</p>
             </div>
           </div>
           <label>
@@ -1806,7 +1833,8 @@ function App() {
           <div className="step-title">
             <span>2</span>
             <div>
-              <h2>Acceso</h2>
+              <h3>Configura el acceso</h3>
+              <p>El mensaje y la clave son opcionales.</p>
             </div>
           </div>
           <label>
@@ -1830,15 +1858,14 @@ function App() {
         </div>
         <div className="create-action">
           <p>
-            <Icon name="lock" size={15} /> Almacenamiento privado y acceso
-            mediante enlaces temporales.
+            <Icon name="lock" size={15} /> El PDF se guarda de forma privada.
           </p>
           <button className="primary" onClick={createRound} disabled={busy}>
             {busy ? (
               "Creando…"
             ) : (
               <>
-                <span>Crear enlace</span>
+                <span>Crear proceso y obtener enlace</span>
                 <Icon name="arrow" size={17} />
               </>
             )}
@@ -1850,23 +1877,27 @@ function App() {
         </aside>
         {createdLink && (
           <div className="share-link" role="status">
-            <span>Enlace listo</span>
-            <a href={createdLink} target="_blank" rel="noreferrer">
-              {createdLink}
-            </a>
-            <button
-              className="text-button"
-              onClick={() =>
-                navigator.clipboard
-                  .writeText(createdLink)
-                  .then(() => setNotice("Enlace copiado."))
-                  .catch(() =>
-                    setNotice("No se pudo copiar; selecciónalo manualmente."),
-                  )
-              }
-            >
-              Copiar
-            </button>
+            <div className="share-link-head">
+              <div>
+                <span>Proceso creado</span>
+                <strong>Ya puedes compartir el documento</strong>
+              </div>
+              <Icon name="check" size={20} />
+            </div>
+            <div className="share-link-row">
+              <a href={createdLink} target="_blank" rel="noreferrer">Abrir enlace de firma</a>
+              <button
+                className="signout"
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(createdLink)
+                    .then(() => setNotice("Enlace copiado."))
+                    .catch(() => setNotice("No se pudo copiar; selecciónalo manualmente."))
+                }
+              >
+                Copiar enlace
+              </button>
+            </div>
             {createdRoundId && <InvitationComposer workflowId={createdRoundId} />}
           </div>
         )}
