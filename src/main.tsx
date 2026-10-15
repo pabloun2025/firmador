@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState, type ReactNode } from "react";
+import { FormEvent, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
@@ -1876,9 +1876,11 @@ function App() {
     </main>
   );
 }
+const adminHost = window.location.hostname === "admin.veryfacil.org";
+const adminFallback = window.location.pathname === "/superadmin";
+const AdminApp = lazy(() => import("./admin/AdminApp").then((module) => ({ default: module.AdminApp })));
 createRoot(document.getElementById("root")!).render(
-  <>
-    <App />
-    <Footer />
-  </>,
+  adminHost || adminFallback
+    ? <Suspense fallback={<main className="admin-loading-page">Abriendo el acceso seguro…</main>}><AdminApp /></Suspense>
+    : <><App /><Footer /></>,
 );

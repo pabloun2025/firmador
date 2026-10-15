@@ -13,6 +13,8 @@ const escapeHtml = (value: string) =>
         char
       ]!,
   );
+const render = (template: string, variables: Record<string,string>) => Object.entries(variables).reduce((result,[key,value]) => result.replaceAll(`{{${key}}}`, value), template);
+const paragraphs = (value: string) => value.split(/\n{2,}/).map(part => `<p style="line-height:1.65;color:#53665e">${escapeHtml(part).replaceAll('\n','<br>')}</p>`).join('');
 
 async function owner(request: Request) {
   const authorization = request.headers.get("Authorization");
@@ -146,11 +148,18 @@ Deno.serve(async (request) => {
     });
     if (error) throw error;
     if (action === "release_turn" && data?.next?.email && data.next.token) {
+      const [{ data: settings }, { data: template }] = await Promise.all([
+        admin.from("system_settings").select("email_master_enabled,email_turn_enabled").eq("singleton", true).single(),
+        admin.from("email_templates").select("subject_template,body_template,enabled").eq("template_key", "turn_ready").single(),
+      ]);
       const key = Deno.env.get("RESEND_API_KEY");
       const from = Deno.env.get("RESEND_FROM_EMAIL");
-      if (key && from) {
+      if (settings?.email_master_enabled && settings.email_turn_enabled && template?.enabled && key && from) {
         const link = `https://firma.veryfacil.org/r/${id}?turn=${encodeURIComponent(data.next.token)}`;
-        const html = `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Turno disponible</p><h1 style="margin:10px 0 16px;font-size:28px">Ya puedes continuar</h1><p>Hola ${escapeHtml(String(data.next.holder_name ?? ""))},</p><p style="line-height:1.65;color:#53665e">Tu acceso está activo durante 10 minutos. Descarga el PDF, fírmalo con FirmaEC o Adobe y sube la copia firmada.</p><p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Abrir mi documento</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Documento privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
+        const variables = { name: String(data.next.holder_name ?? "Participante"), title: "", link };
+        const subject = render(template.subject_template, variables);
+        const body = render(template.body_template, variables);
+        const html = `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Turno disponible</p><h1 style="margin:10px 0 16px;font-size:28px">Ya puedes continuar</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Abrir mi documento</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Documento privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -160,7 +169,7 @@ Deno.serve(async (request) => {
           body: JSON.stringify({
             from,
             to: [data.next.email],
-            subject: "LeapSign · Ya puedes firmar",
+            subject,
             html,
           }),
         });

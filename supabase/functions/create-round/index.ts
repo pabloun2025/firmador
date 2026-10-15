@@ -21,6 +21,8 @@ Deno.serve(async request => {
     const bytes = new Uint8Array(await document.arrayBuffer());
     if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw new Error('El archivo no es un PDF legible.');
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data: settings } = await admin.from('system_settings').select('maintenance_mode').eq('singleton', true).single();
+    if (settings?.maintenance_mode) throw new Error('LeapSign está en mantenimiento. Inténtalo más tarde.');
     const { data: workflow, error: workflowError } = await admin.from('workflows').insert({ owner_id: user.id, title, message, group_key_hash: groupKey ? await hash(groupKey) : null }).select('id').single();
     if (workflowError) throw new Error('No se pudo crear la ronda.');
     const path = `${workflow.id}/0.pdf`; const digest = await hashBytes(bytes);

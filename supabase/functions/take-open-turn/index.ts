@@ -31,6 +31,8 @@ const escapeHtml = (value: string) =>
   );
 const emailFrame = (content: string) =>
   `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p>${content}<hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Documento privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
+const render = (template: string, variables: Record<string,string>) => Object.entries(variables).reduce((result,[key,value]) => result.replaceAll(`{{${key}}}`, value), template);
+const paragraphs = (value: string) => value.split(/\n{2,}/).map(part => `<p style="line-height:1.65;color:#53665e">${escapeHtml(part).replaceAll('\n','<br>')}</p>`).join('');
 async function notifyWaitlisted(
   admin: ReturnType<typeof createClient>,
   workflowId: string,
@@ -38,6 +40,11 @@ async function notifyWaitlisted(
   email: string,
   name: string,
 ) {
+  const [{ data: settings }, { data: template }] = await Promise.all([
+    admin.from("system_settings").select("email_master_enabled,email_queue_enabled").eq("singleton", true).single(),
+    admin.from("email_templates").select("subject_template,body_template,enabled").eq("template_key", "waitlisted").single(),
+  ]);
+  if (!settings?.email_master_enabled || !settings.email_queue_enabled || !template?.enabled) return;
   const dedupeKey = `waitlisted:${workflowId}:${sessionHash}`;
   const { data: existing } = await admin
     .from("open_round_notifications")
@@ -86,8 +93,11 @@ async function notifyWaitlisted(
     );
   if (accessError) throw accessError;
   const link = `https://firma.veryfacil.org/r/${workflowId}?queue=${encodeURIComponent(accessToken)}`;
+  const variables = { name, title: "", link };
+  const subject = render(template.subject_template, variables);
+  const body = render(template.body_template, variables);
   const html = emailFrame(
-    `<p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Solicitud recibida</p><h1 style="margin:10px 0 16px;font-size:28px">Estás en la cola de firma</h1><p>Hola ${escapeHtml(name)},</p><p style="line-height:1.65;color:#53665e">Conservamos tu posición y te avisaremos cuando el documento esté disponible para ti. También puedes consultar el estado desde el enlace.</p><p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Consultar mi turno</a></p>`,
+    `<p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Solicitud recibida</p><h1 style="margin:10px 0 16px;font-size:28px">Estás en la cola de firma</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Consultar mi turno</a></p>`,
   );
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -99,7 +109,7 @@ async function notifyWaitlisted(
     body: JSON.stringify({
       from,
       to: [email],
-      subject: "LeapSign · Estás en la cola de firma",
+      subject,
       html,
     }),
   });
@@ -139,6 +149,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    const { data: settings } = await admin.from("system_settings").select("maintenance_mode").eq("singleton", true).single();
+    if (settings?.maintenance_mode) throw new Error("LeapSign está en mantenimiento. Inténtalo más tarde.");
     const { data: round } = await admin
       .from("workflows")
       .select("group_key_hash,title")

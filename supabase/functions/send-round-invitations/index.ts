@@ -4,6 +4,8 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const emailOk = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(x => x.toString(16).padStart(2, '0')).join('');
 const esc = (value: string) => value.replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[c]!));
+const render = (template: string, variables: Record<string,string>) => Object.entries(variables).reduce((result,[key,value]) => result.replaceAll(`{{${key}}}`, value), template);
+const paragraphs = (value: string) => value.split(/\n{2,}/).map(part => `<p style="line-height:1.65;color:#53665e">${esc(part).replaceAll('\n','<br>')}</p>`).join('');
 async function owner(request: Request) {
   const authorization = request.headers.get('Authorization');
   if (!authorization) throw new Error('No autorizado.');
@@ -27,6 +29,12 @@ Deno.serve(async request => {
     const unique = [...new Map(normalized.map(item => [item.email, item])).values()];
     const user = await owner(request);
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const [{ data: settings }, { data: template }] = await Promise.all([
+      admin.from('system_settings').select('email_master_enabled,email_invitations_enabled,maintenance_mode').eq('singleton', true).single(),
+      admin.from('email_templates').select('subject_template,body_template,enabled').eq('template_key', 'invitation').single(),
+    ]);
+    if (settings?.maintenance_mode) throw new Error('LeapSign está en mantenimiento. Inténtalo más tarde.');
+    if (!settings?.email_master_enabled || !settings.email_invitations_enabled || !template?.enabled) throw new Error('Las invitaciones por correo están desactivadas temporalmente.');
     const { data: workflow } = await admin.from('workflows').select('id,title,status').eq('id', id).eq('owner_id', user.id).maybeSingle();
     if (!workflow || workflow.status !== 'active') throw new Error('Este proceso ya no admite nuevas firmas.');
     const resendKey = Deno.env.get('RESEND_API_KEY'); const from = Deno.env.get('RESEND_FROM_EMAIL');
@@ -48,8 +56,11 @@ Deno.serve(async request => {
         : await admin.from('round_invitations').insert({ workflow_id:id, owner_id:user.id, email:recipient.email, holder_name:displayName, token_hash:await hash(rawToken) }).select('id').single();
       if (invitation.error || !invitation.data) { failed.push(recipient.email); continue; }
       const link = `https://firma.veryfacil.org/r/${id}?invite=${encodeURIComponent(rawToken)}`;
-      const html = `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Invitación a firmar</p><h1 style="margin:10px 0 16px;font-size:28px">Tienes un documento pendiente</h1><p>Hola ${esc(displayName)},</p><p style="line-height:1.65;color:#53665e">Te han invitado a participar en <strong>${esc(workflow.title)}</strong>. Al abrir este enlace quedarás registrado en la cola. Cuando llegue tu turno podrás descargar la versión vigente, firmarla y subir el PDF resultante.</p><p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Entrar a mi turno</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Enlace privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
-      const response = await fetch('https://api.resend.com/emails', { method:'POST', headers:{ Authorization:`Bearer ${resendKey}`, 'Content-Type':'application/json', 'Idempotency-Key':`leapsign-invitation-${invitation.data.id}` }, body:JSON.stringify({ from, to:[recipient.email], subject:`LeapSign · Invitación a firmar ${workflow.title}`, html }) });
+      const variables = { name: displayName, title: workflow.title, link };
+      const subject = render(template.subject_template, variables);
+      const body = render(template.body_template, variables);
+      const html = `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Invitación a firmar</p><h1 style="margin:10px 0 16px;font-size:28px">Tienes un documento pendiente</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Entrar a mi turno</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Enlace privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
+      const response = await fetch('https://api.resend.com/emails', { method:'POST', headers:{ Authorization:`Bearer ${resendKey}`, 'Content-Type':'application/json', 'Idempotency-Key':`leapsign-invitation-${invitation.data.id}` }, body:JSON.stringify({ from, to:[recipient.email], subject, html }) });
       if (response.ok) { sent++; await admin.from('round_invitations').update({ email_sent_at:new Date().toISOString(), email_error:null }).eq('id', invitation.data.id); }
       else { failed.push(recipient.email); await admin.from('round_invitations').update({ email_error:`HTTP ${response.status}` }).eq('id', invitation.data.id); }
     }
