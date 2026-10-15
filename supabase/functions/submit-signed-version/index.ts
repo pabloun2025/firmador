@@ -53,6 +53,58 @@ async function notifyNext(
   });
 }
 
+async function notifyOwnerWhenComplete(
+  admin: ReturnType<typeof createClient>,
+  workflowId: string,
+) {
+  const { data: workflow } = await admin
+    .from("workflows")
+    .select("id,owner_id,title,signature_count,expected_signature_count,owner_completion_notified_at")
+    .eq("id", workflowId)
+    .maybeSingle();
+  if (!workflow?.expected_signature_count || workflow.owner_completion_notified_at || workflow.signature_count < workflow.expected_signature_count) return;
+  const [{ data: settings }, { data: template }] = await Promise.all([
+    admin.from("system_settings").select("email_master_enabled,email_completion_enabled").eq("singleton", true).single(),
+    admin.from("email_templates").select("subject_template,body_template,enabled").eq("template_key", "owner_completed").single(),
+  ]);
+  const key = Deno.env.get("RESEND_API_KEY");
+  const from = Deno.env.get("RESEND_FROM_EMAIL");
+  if (!settings?.email_master_enabled || !settings.email_completion_enabled || !template?.enabled || !key || !from) return;
+  const notifiedAt = new Date().toISOString();
+  const { data: claimed } = await admin.from("workflows")
+    .update({ owner_completion_notified_at: notifiedAt })
+    .eq("id", workflowId)
+    .is("owner_completion_notified_at", null)
+    .select("owner_id,title")
+    .maybeSingle();
+  if (!claimed) return;
+  const { data: ownerResult } = await admin.auth.admin.getUserById(claimed.owner_id);
+  const owner = ownerResult.user;
+  if (!owner?.email) {
+    await admin.from("workflows").update({ owner_completion_notified_at: null }).eq("id", workflowId).eq("owner_completion_notified_at", notifiedAt);
+    return;
+  }
+  const name = String(owner.user_metadata?.first_name || owner.user_metadata?.full_name || "").trim() || "propietario/a";
+  const link = "https://firma.veryfacil.org";
+  const variables = { name, title: String(claimed.title), link };
+  const subject = render(template.subject_template, variables);
+  const body = render(template.body_template, variables);
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from,
+        to: [owner.email],
+        subject,
+        html: `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Objetivo alcanzado</p><h1 style="margin:10px 0 16px;font-size:28px">Ya están todas las firmas previstas</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Revisar el proceso</a></p></main></div>`,
+      }),
+    });
+    if (response.ok) return;
+  } catch { /* Leave the accepted signature intact and allow a later retry. */ }
+  await admin.from("workflows").update({ owner_completion_notified_at: null }).eq("id", workflowId).eq("owner_completion_notified_at", notifiedAt);
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS")
     return new Response("ok", { headers: cors });
@@ -174,7 +226,10 @@ Deno.serve(async (request) => {
     if (acceptError || !accepted?.ok)
       throw new Error("No pudimos incorporar el documento firmado.");
     await admin.from("round_invitations").update({ status: "completed", completed_at: new Date().toISOString() }).eq("workflow_id", id).eq("session_hash", sessionHash).in("status", ["pending", "opened"]);
-    await notifyNext(admin, id, accepted.next ?? null);
+    await Promise.allSettled([
+      notifyNext(admin, id, accepted.next ?? null),
+      notifyOwnerWhenComplete(admin, id),
+    ]);
     return Response.json({ state: "accepted" }, { headers: cors });
   } catch (error) {
     return Response.json(

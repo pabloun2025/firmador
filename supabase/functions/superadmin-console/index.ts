@@ -210,7 +210,7 @@ async function listWorkflows(context: AdminContext, payload: Record<string, unkn
 }
 
 async function updateSettings(context: AdminContext, payload: Record<string, unknown>) {
-  const allowed = ["email_master_enabled", "email_invitations_enabled", "email_queue_enabled", "email_turn_enabled", "automatic_cleanup_enabled", "maintenance_mode"];
+  const allowed = ["email_master_enabled", "email_invitations_enabled", "email_queue_enabled", "email_turn_enabled", "email_completion_enabled", "automatic_cleanup_enabled", "maintenance_mode"];
   const changes: Record<string, boolean | string> = { updated_at: new Date().toISOString() };
   for (const key of allowed) if (typeof payload[key] === "boolean") changes[key] = payload[key] as boolean;
   if (Object.keys(changes).length === 1) throw new HttpError("No hay cambios válidos.");

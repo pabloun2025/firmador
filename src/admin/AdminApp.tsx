@@ -69,6 +69,20 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+async function invokeRecovery<T>(body: Record<string, unknown>): Promise<T> {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.functions.invoke("superadmin-recovery", { body });
+  if (error) {
+    let detail = error.message;
+    try {
+      const response = (error as { context?: Response }).context;
+      if (response) detail = ((await response.clone().json()) as { error?: string }).error || detail;
+    } catch { /* Keep provider detail. */ }
+    throw new Error(detail);
+  }
+  return data as T;
+}
+
 function AdminBrand() {
   return <div className="admin-brand"><span><img src="/frog-mark.svg" alt="" /></span><div><strong>LeapSign</strong><small>Centro de control</small></div></div>;
 }
@@ -78,6 +92,7 @@ function Login({ onSession }: { onSession: (session: Session) => void }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true); setError("");
@@ -85,6 +100,17 @@ function Login({ onSession }: { onSession: (session: Session) => void }) {
     const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (result.error || !result.data.session) setError("No se pudo iniciar sesión. Comprueba tus datos y vuelve a intentarlo.");
     else onSession(result.data.session);
+    setBusy(false);
+  }
+  async function recoverPassword() {
+    setError(""); setNotice("");
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError("Escribe primero el correo de la cuenta administrativa.");
+    setBusy(true);
+    const supabase = await getSupabase();
+    const redirectTo = window.location.hostname === "admin.veryfacil.org" ? "https://admin.veryfacil.org" : `${window.location.origin}/superadmin`;
+    const result = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (result.error) setError("No pudimos enviar el enlace. Espera unos minutos y vuelve a intentarlo.");
+    else setNotice("Si el correo corresponde a la cuenta administrativa, recibirás un enlace para crear una contraseña nueva.");
     setBusy(false);
   }
   return <main className="admin-login">
@@ -97,10 +123,37 @@ function Login({ onSession }: { onSession: (session: Session) => void }) {
         <label>Correo<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
         <label>Contraseña<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
         <button disabled={busy}>{busy ? "Comprobando…" : "Continuar"}</button>
+        <button type="button" className="admin-link-button" disabled={busy} onClick={recoverPassword}>¿Olvidaste la contraseña?</button>
       </form>
+      {notice && <p className="admin-alert success">{notice}</p>}
       {error && <p className="admin-alert error">{error}</p>}
     </section>
   </main>;
+}
+
+function PasswordRecovery({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const valid = password.length >= 12 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
+  async function save(event: FormEvent) {
+    event.preventDefault(); setError("");
+    if (!valid) return setError("Usa al menos 12 caracteres, mayúscula, minúscula, número y símbolo.");
+    if (password !== confirm) return setError("Las contraseñas no coinciden.");
+    setBusy(true);
+    const supabase = await getSupabase();
+    const result = await supabase.auth.updateUser({ password });
+    if (result.error) setError("El enlace ya no es válido. Solicita uno nuevo.");
+    else { await supabase.auth.signOut(); window.history.replaceState({}, "", window.location.pathname); onDone(); }
+    setBusy(false);
+  }
+  return <main className="admin-login"><AdminBrand /><section>
+    <span className="admin-kicker">Recuperación verificada</span><h1>Crea una contraseña nueva</h1>
+    <p>Debe tener 12 caracteres o más, mayúscula, minúscula, número y símbolo.</p>
+    <form onSubmit={save}><label>Nueva contraseña<input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label><label>Repite la contraseña<input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} required /></label><button disabled={busy}>{busy ? "Guardando…" : "Guardar contraseña"}</button></form>
+    {error && <p className="admin-alert error">{error}</p>}
+  </section></main>;
 }
 
 function MfaGate({ onReady }: { onReady: () => void }) {
@@ -110,6 +163,10 @@ function MfaGate({ onReady }: { onReady: () => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [recoveringFactor, setRecoveringFactor] = useState(false);
+  const [recoveryRequested, setRecoveryRequested] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryNotice, setRecoveryNotice] = useState("");
   useEffect(() => {
     void (async () => {
       const supabase = await getSupabase();
@@ -143,6 +200,39 @@ function MfaGate({ onReady }: { onReady: () => void }) {
     }
     setBusy(false);
   }
+  async function requestFactorRecovery() {
+    setBusy(true); setError(""); setRecoveryNotice("");
+    try {
+      await invokeRecovery({ action: "request" });
+      setRecoveryRequested(true);
+      setRecoveryNotice("Enviamos un código de ocho dígitos al correo verificado de la cuenta administrativa.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos enviar el código."); }
+    setBusy(false);
+  }
+  async function confirmFactorRecovery(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      await invokeRecovery({ action: "confirm", code: recoveryCode });
+      const supabase = await getSupabase();
+      await supabase.auth.signOut();
+      window.location.reload();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos restablecer el segundo factor."); setBusy(false); }
+  }
+  if (recoveringFactor) return <main className="admin-login">
+    <AdminBrand />
+    <section>
+      <span className="admin-kicker">Recuperación protegida</span>
+      <h1>Restablecer el segundo factor</h1>
+      <p>Como ya validaste tu contraseña, enviaremos un código únicamente al correo verificado del superadministrador. El código caduca en 10 minutos.</p>
+      {!recoveryRequested ? <button disabled={busy} onClick={requestFactorRecovery}>{busy ? "Enviando…" : "Enviar código de recuperación"}</button> : <form onSubmit={confirmFactorRecovery}>
+        <label>Código de ocho dígitos<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{8}" maxLength={8} value={recoveryCode} onChange={(event) => setRecoveryCode(event.target.value.replace(/\D/g, ""))} required /></label>
+        <button disabled={busy || recoveryCode.length !== 8}>{busy ? "Comprobando…" : "Restablecer 2FA"}</button>
+      </form>}
+      {recoveryNotice && <p className="admin-alert success">{recoveryNotice}</p>}
+      {error && <p className="admin-alert error">{error}</p>}
+      <button type="button" className="admin-link-button" disabled={busy} onClick={() => { setRecoveringFactor(false); setError(""); }}>Volver a la verificación</button>
+    </section>
+  </main>;
   return <main className="admin-login">
     <AdminBrand />
     <section>
@@ -154,6 +244,7 @@ function MfaGate({ onReady }: { onReady: () => void }) {
         <label>Código de seis dígitos<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required /></label>
         <button disabled={busy || code.length !== 6}>{busy ? "Comprobando…" : "Confirmar y entrar"}</button>
       </form>
+      {!qr && <button type="button" className="admin-link-button" disabled={busy} onClick={() => { setRecoveringFactor(true); setError(""); }}>No tengo acceso a mi autenticador</button>}
       {error && <p className="admin-alert error">{error}</p>}
     </section>
   </main>;
@@ -232,7 +323,7 @@ function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard
   const [settings, setSettings] = useState({ ...dashboard.settings });
   const [editing, setEditing] = useState<EmailTemplate | null>(null);
   const toggles = [
-    ["email_master_enabled", "Envío general de correos"], ["email_invitations_enabled", "Invitaciones"], ["email_queue_enabled", "Confirmaciones de cola"], ["email_turn_enabled", "Avisos de turno"], ["automatic_cleanup_enabled", "Procesamiento de purgas"], ["maintenance_mode", "Modo mantenimiento"],
+    ["email_master_enabled", "Envío general de correos"], ["email_invitations_enabled", "Invitaciones"], ["email_queue_enabled", "Confirmaciones de cola"], ["email_turn_enabled", "Avisos de turno"], ["email_completion_enabled", "Objetivo de firmas alcanzado"], ["automatic_cleanup_enabled", "Procesamiento de purgas"], ["maintenance_mode", "Modo mantenimiento"],
   ];
   async function saveSettings() {
     const reason = window.prompt("Motivo del cambio de configuración:"); if (!reason) return;
@@ -292,6 +383,7 @@ export function AdminApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [recoveringPassword, setRecoveringPassword] = useState(window.location.hash.includes("type=recovery"));
   useEffect(() => {
     document.title = "Administración · LeapSign";
     const robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
@@ -300,13 +392,14 @@ export function AdminApp() {
     void getSupabase().then(async (supabase) => {
       const current = await supabase.auth.getSession();
       setSession(current.data.session);
-      const listener = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) setReady(false); });
+      const listener = supabase.auth.onAuthStateChange((event, next) => { setSession(next); if (event === "PASSWORD_RECOVERY") setRecoveringPassword(true); if (!next) setReady(false); });
       unsubscribe = () => listener.data.subscription.unsubscribe();
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
   if (loading) return <main className="admin-loading-page"><AdminBrand /><p>Abriendo el acceso seguro…</p></main>;
+  if (recoveringPassword) return <PasswordRecovery onDone={() => { setRecoveringPassword(false); setSession(null); }} />;
   if (!session) return <Login onSession={(next) => setSession(next)} />;
   if (!ready) return <MfaGate onReady={() => setReady(true)} />;
   return <Console session={session} />;

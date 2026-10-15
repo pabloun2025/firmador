@@ -1,7 +1,8 @@
-import { FormEvent, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { FormEvent, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
+import { expandRoundId, roundPath } from "./lib/round-link";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -893,6 +894,7 @@ type OwnerRound = {
   status: string;
   created_at: string;
   signature_count: number;
+  expected_signature_count?: number | null;
 };
 type Contact = { id: string; email: string; display_name?: string | null };
 type InviteDraft = {
@@ -1049,7 +1051,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
         <button type="button" className="signout" disabled={busy || drafts.length >= 25} onClick={() => setDrafts((current) => [...current, emptyInvite()])}>+ Añadir otra persona</button>
         <button type="button" className="primary" disabled={busy || !pending.length} onClick={() => send(pending, "drafts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : pending.length === 1 ? "Enviar 1 invitación" : `Enviar ${pending.length} invitaciones`}</button>
       </div>
-      {savedContacts.length > 0 && <details className="contact-picker">
+      {savedContacts.length > 0 && <details className="contact-picker" open>
         <summary><span>Elegir contactos frecuentes</span><small>{chosen.length ? `${chosen.length} seleccionado${chosen.length === 1 ? "" : "s"}` : `${savedContacts.length} guardado${savedContacts.length === 1 ? "" : "s"}`}</small><Icon name="chevron" size={17} /></summary>
         <div className="contact-sort">
           <label>Ordenar por<select value={contactSort} onChange={(event) => { setContactSort(event.target.value as "name" | "email"); setContactPage(0); }}><option value="name">Nombre</option><option value="email">Correo</option></select></label>
@@ -1072,7 +1074,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
     </div>
   );
 }
-function OwnerPanel() {
+function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
   const [rounds, setRounds] = useState<OwnerRound[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [notice, setNotice] = useState("");
@@ -1081,7 +1083,7 @@ function OwnerPanel() {
     const s = await getSupabase();
     const { data, error } = await s
       .from("workflows")
-      .select("id,title,status,created_at,signature_count")
+      .select("id,title,status,created_at,signature_count,expected_signature_count")
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) setNotice("No pudimos cargar tus rondas.");
@@ -1192,11 +1194,50 @@ function OwnerPanel() {
   const previousVersions = selected?.versions.filter(
     (version: any) => version.id !== selected.workflow.current_version_id,
   ) ?? [];
+  const activeRounds = rounds.filter((round) =>
+    round.status === "active" || round.status === "paused_error",
+  );
+  const previousRounds = rounds.filter((round) =>
+    round.status !== "active" && round.status !== "paused_error",
+  );
+  const renderRoundList = (items: OwnerRound[]) => (
+    <div className="owner-list">
+      {items.map((round) => (
+        <div key={round.id} className={`owner-round ${round.id === highlightRoundId ? "is-new" : ""}`}>
+          <button className="owner-round-open" onClick={() => openRound(round.id)}>
+            <span>
+              <strong>{round.title}</strong>
+              <small>Creado el {new Date(round.created_at).toLocaleDateString()}</small>
+            </span>
+            <span className="round-list-meta">
+              {round.id === highlightRoundId && <span className="new-process-badge">Creado ahora</span>}
+              <span className={`status-badge status-${round.status}`}>{statusText(round.status)}</span>
+              <small>{round.expected_signature_count ? `${round.signature_count} de ${round.expected_signature_count} firmas` : `${round.signature_count} ${round.signature_count === 1 ? "firma" : "firmas"}`}</small>
+              <strong className="open-label">Gestionar <Icon name="arrow" size={14} /></strong>
+            </span>
+          </button>
+          <button
+            className="trash-button"
+            aria-label={`Eliminar ${round.title}`}
+            title="Eliminar proceso"
+            onClick={() => manageRound("purge", undefined, round.id)}
+          >
+            <Icon name="trash" size={18} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
   useEffect(() => {
     void loadRounds();
   }, []);
+  useEffect(() => {
+    if (!highlightRoundId) return;
+    void loadRounds();
+    void openRound(highlightRoundId);
+  }, [highlightRoundId]);
   return (
-    <section className="owner-panel">
+    <section className="owner-panel" id="mis-documentos">
       <div className="owner-panel-head">
         <div>
           <span className="section-kicker">Actividad</span>
@@ -1210,35 +1251,15 @@ function OwnerPanel() {
       {rounds.length === 0 ? (
         <p className="empty-state">Todavía no has creado ningún proceso.</p>
       ) : (
-        <div className="owner-list">
-          {rounds.map((round) => (
-            <div key={round.id} className="owner-round">
-              <button
-                className="owner-round-open"
-                onClick={() => openRound(round.id)}
-              >
-                <span>
-                  <strong>{round.title}</strong>
-                  <small>
-                    Creado el {new Date(round.created_at).toLocaleDateString()}
-                  </small>
-                </span>
-                <span className="round-list-meta">
-                  <span className={`status-badge status-${round.status}`}>{statusText(round.status)}</span>
-                  <small>{round.signature_count} {round.signature_count === 1 ? "firma" : "firmas"}</small>
-                  <strong className="open-label">Gestionar <Icon name="arrow" size={14} /></strong>
-                </span>
-              </button>
-              <button
-                className="trash-button"
-                aria-label={`Eliminar ${round.title}`}
-                title="Eliminar proceso"
-                onClick={() => manageRound("purge", undefined, round.id)}
-              >
-                <Icon name="trash" size={18} />
-              </button>
-            </div>
-          ))}
+        <div className="process-groups">
+          {activeRounds.length > 0 && <section className="process-group">
+            <div className="process-group-heading"><h3>En curso</h3><span>{activeRounds.length}</span></div>
+            {renderRoundList(activeRounds)}
+          </section>}
+          {previousRounds.length > 0 && <details className="previous-processes">
+            <summary>Procesos anteriores <span>{previousRounds.length}</span><Icon name="chevron" size={17} /></summary>
+            {renderRoundList(previousRounds)}
+          </details>}
         </div>
       )}
       {selected && (
@@ -1247,7 +1268,7 @@ function OwnerPanel() {
             <div>
               <span className={`status-badge status-${selected.workflow.status}`}>{statusText(selected.workflow.status)}</span>
               <h3>{selected.workflow.title}</h3>
-              <p>{selected.workflow.signature_count} {selected.workflow.signature_count === 1 ? "firma incorporada" : "firmas incorporadas"}</p>
+              <p>{selected.workflow.expected_signature_count ? `${selected.workflow.signature_count} de ${selected.workflow.expected_signature_count} firmas previstas` : `${selected.workflow.signature_count} ${selected.workflow.signature_count === 1 ? "firma incorporada" : "firmas incorporadas"} · cantidad abierta`}</p>
             </div>
             <div className="owner-actions">
               {selected.workflow.status === "active" ? (
@@ -1355,7 +1376,7 @@ function OwnerPanel() {
                 <p>Comparte el acceso general o envía invitaciones personales por correo.</p>
               </div>
             </div>
-            <div className="share-url"><input readOnly value={`${window.location.origin}/r/${selected.workflow.id}`} aria-label="Enlace para solicitar un turno de firma" /><button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/r/${selected.workflow.id}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button></div>
+            <div className="share-url"><input readOnly value={`${window.location.origin}${roundPath(selected.workflow.id)}`} aria-label="Enlace para solicitar un turno de firma" /><button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}${roundPath(selected.workflow.id)}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button></div>
             <p className="share-help">El enlace estará disponible mientras el proceso siga en curso.</p>
             <InvitationComposer workflowId={selected.workflow.id} contacts={selected.contacts ?? []} onSent={() => { void openRound(selected.workflow.id); }} />
           </section>}
@@ -1456,8 +1477,9 @@ function App() {
     1,
   ) as keyof typeof LEGAL_CONTENT;
   if (legalPage in LEGAL_CONTENT) return <LegalPage page={legalPage} />;
-  const match = window.location.pathname.match(/^\/r\/([0-9a-f-]{36})$/i);
-  if (match) return <RoundAccess id={match[1]} />;
+  const match = window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{22}|[0-9a-f-]{36})$/);
+  const roundId = match ? expandRoundId(match[1]) : "";
+  if (roundId) return <RoundAccess id={roundId} />;
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1473,12 +1495,17 @@ function App() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [key, setKey] = useState("");
+  const [expectedSignatures, setExpectedSignatures] = useState("2");
+  const [indefiniteSigners, setIndefiniteSigners] = useState(false);
   const [document, setDocument] = useState<File | null>(null);
   const [notice, setNotice] = useState("");
   const [createdLink, setCreatedLink] = useState("");
   const [createdRoundId, setCreatedRoundId] = useState("");
+  const [createdRoundTitle, setCreatedRoundTitle] = useState("");
+  const [creationStage, setCreationStage] = useState<"create" | "share" | "track">("create");
   const [busy, setBusy] = useState(false);
   const [authNoticeTone, setAuthNoticeTone] = useState<"info" | "error" | "success">("info");
+  const createdResultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let unsubscribe = () => {};
     getSupabase()
@@ -1497,6 +1524,40 @@ function App() {
       );
     return () => unsubscribe();
   }, []);
+  useEffect(() => {
+    if (!createdLink || creationStage !== "share") return;
+    window.requestAnimationFrame(() => {
+      createdResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      createdResultRef.current?.focus({ preventScroll: true });
+    });
+  }, [createdLink, creationStage]);
+  function showCreatedProcess() {
+    setCreationStage("track");
+    window.setTimeout(() => {
+      window.document.getElementById("mis-documentos")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  }
+  function finishInvitationStep() {
+    setNotice("Invitaciones enviadas. Abriendo el seguimiento del proceso…");
+    window.setTimeout(showCreatedProcess, 650);
+  }
+  function startNewProcess() {
+    setTitle("");
+    setMessage("");
+    setKey("");
+    setExpectedSignatures("2");
+    setIndefiniteSigners(false);
+    setDocument(null);
+    setCreatedLink("");
+    setCreatedRoundId("");
+    setCreatedRoundTitle("");
+    setNotice("");
+    setCreationStage("create");
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 30);
+  }
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -1618,6 +1679,9 @@ function App() {
     if (!session) return;
     if (!title.trim() || !document)
       return setNotice("Añade un nombre y el PDF para continuar.");
+    const expected = Number(expectedSignatures);
+    if (!indefiniteSigners && (!Number.isInteger(expected) || expected < 1 || expected > 20))
+      return setNotice("Indica entre 1 y 20 personas, o marca que la cantidad es indefinida.");
     setBusy(true);
     setCreatedLink("");
     setCreatedRoundId("");
@@ -1626,6 +1690,7 @@ function App() {
     form.set("title", title);
     form.set("message", message);
     form.set("groupKey", key);
+    form.set("expectedSignatures", indefiniteSigners ? "" : String(expected));
     form.set("document", document);
     const supabase = await getSupabase();
     const { data, error } = await supabase.functions.invoke("create-round", {
@@ -1638,7 +1703,9 @@ function App() {
     else {
       setNotice("");
       setCreatedRoundId(data.id);
-      setCreatedLink(`${window.location.origin}/r/${data.id}`);
+      setCreatedRoundTitle(title.trim());
+      setCreatedLink(`${window.location.origin}${roundPath(data.id)}`);
+      setCreationStage("share");
     }
     setBusy(false);
   }
@@ -1787,7 +1854,8 @@ function App() {
           Salir
         </button>
       </div>
-      <section className="create-card">
+      <section className={`create-card creation-stage-${creationStage}`}>
+        {creationStage === "create" && <>
         <header className="create-card-head">
           <span className="section-kicker">Nuevo proceso</span>
           <h2>Nuevo documento para firmar</h2>
@@ -1855,6 +1923,30 @@ function App() {
               placeholder="Clave para el enlace"
             />
           </label>
+          <fieldset className="signer-target">
+            <legend>¿Cuántas personas deben firmar?</legend>
+            <p>Te avisaremos por correo cuando se alcance esta cantidad.</p>
+            <label className="signer-count">
+              Número de firmantes
+              <input
+                type="number"
+                min="1"
+                max="20"
+                inputMode="numeric"
+                value={expectedSignatures}
+                disabled={indefiniteSigners}
+                onChange={(event) => setExpectedSignatures(event.target.value)}
+              />
+            </label>
+            <label className="indefinite-signers">
+              <input
+                type="checkbox"
+                checked={indefiniteSigners}
+                onChange={(event) => setIndefiniteSigners(event.target.checked)}
+              />
+              <span><strong>No lo sé todavía</strong><small>La cantidad quedará abierta y no se enviará el aviso de objetivo alcanzado.</small></span>
+            </label>
+          </fieldset>
         </div>
         <div className="create-action">
           <p>
@@ -1875,17 +1967,25 @@ function App() {
           <Icon name="shield" size={17} />
           <span><strong>Antes de compartir.</strong> Confirma que puedes tratar el documento y los datos de las personas invitadas. LeapSign organiza el proceso, pero no verifica identidades ni certifica firmas. Revisa y guarda siempre la versión final.</span>
         </aside>
-        {createdLink && (
-          <div className="share-link" role="status">
+        </>}
+        {creationStage === "share" && createdLink && (
+          <div className="share-link" role="region" aria-label="Proceso creado" ref={createdResultRef} tabIndex={-1}>
+            <ol className="creation-progress" aria-label="Progreso del proceso">
+              <li className="complete"><span><Icon name="check" size={13} /></span><small>Documento</small></li>
+              <li className="current"><span>2</span><small>Compartir e invitar</small></li>
+              <li><span>3</span><small>Dar seguimiento</small></li>
+            </ol>
             <div className="share-link-head">
               <div>
                 <span>Proceso creado</span>
-                <strong>Ya puedes compartir el documento</strong>
+                <strong>{createdRoundTitle}</strong>
+                <p>Ya puedes copiar el enlace o invitar a las personas que deben firmar.</p>
               </div>
               <Icon name="check" size={20} />
             </div>
-            <div className="share-link-row">
-              <a href={createdLink} target="_blank" rel="noreferrer">Abrir enlace de firma</a>
+            <div className="created-url-block">
+              <span>Enlace para firmar</span>
+              <a className="created-url" href={createdLink} target="_blank" rel="noreferrer">{createdLink}</a>
               <button
                 className="signout"
                 onClick={() =>
@@ -1898,12 +1998,38 @@ function App() {
                 Copiar enlace
               </button>
             </div>
-            {createdRoundId && <InvitationComposer workflowId={createdRoundId} />}
+            {createdRoundId && <InvitationComposer workflowId={createdRoundId} onSent={finishInvitationStep} />}
+            <div className="created-next-step">
+              <div>
+                <span className="section-kicker">Siguiente paso</span>
+                <strong>Administra este proceso</strong>
+                <p>Consulta quién tiene el turno, las personas en espera y las versiones del PDF.</p>
+              </div>
+              <button type="button" className="primary" onClick={showCreatedProcess}>Ir al seguimiento de este proceso <Icon name="arrow" size={16} /></button>
+            </div>
+          </div>
+        )}
+        {creationStage === "track" && createdLink && (
+          <div className="tracking-handoff" role="status">
+            <ol className="creation-progress" aria-label="Progreso del proceso">
+              <li className="complete"><span><Icon name="check" size={13} /></span><small>Documento</small></li>
+              <li className="complete"><span><Icon name="check" size={13} /></span><small>Compartir</small></li>
+              <li className="current"><span>3</span><small>Seguimiento</small></li>
+            </ol>
+            <div>
+              <span className="section-kicker">Proceso activo</span>
+              <h2>{createdRoundTitle}</h2>
+              <p>El seguimiento está abierto debajo. Desde allí puedes consultar firmas, compartir de nuevo el enlace y administrar las versiones.</p>
+            </div>
+            <div className="tracking-handoff-actions">
+              <button type="button" className="signout" onClick={startNewProcess}>Crear otro proceso</button>
+              <button type="button" className="primary" onClick={showCreatedProcess}>Ver proceso activo <Icon name="arrow" size={16} /></button>
+            </div>
           </div>
         )}
         <Notice message={notice} />
       </section>
-      <OwnerPanel />
+      {creationStage !== "share" && <OwnerPanel highlightRoundId={creationStage === "track" ? createdRoundId : ""} />}
     </main>
   );
 }

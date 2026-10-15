@@ -18,7 +18,7 @@ Deno.serve(async request => {
     if (typeof id !== 'string') throw new Error('Ronda inválida.');
     const user = await ownerClient(request);
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: workflow } = await admin.from('workflows').select('id,title,message,status,signature_count,created_at,last_activity_at,paused_at,paused_reason,current_version_id').eq('id', id).eq('owner_id', user.id).maybeSingle();
+    const { data: workflow } = await admin.from('workflows').select('id,title,message,status,signature_count,expected_signature_count,created_at,last_activity_at,paused_at,paused_reason,current_version_id').eq('id', id).eq('owner_id', user.id).maybeSingle();
     if (!workflow) throw new Error('No tienes acceso a esta ronda.');
     const [{ data: versions }, { data: lock }, { data: queue }, { data: reports }, { data: events }, { data: submissions }, { data: contacts }] = await Promise.all([
       admin.from('document_versions').select('id,sequence,sha256,byte_size,created_at,accepted_at,validation_status,submitted_by_session_hash,submitted_by_name,submitted_by_email').eq('workflow_id', id).is('discarded_at', null).order('sequence', { ascending: false }),

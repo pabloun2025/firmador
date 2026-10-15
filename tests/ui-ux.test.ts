@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { compactRoundId, expandRoundId, roundPath } from "../src/lib/round-link";
 
 const app = readFileSync("src/main.tsx", "utf8");
 const redesign = readFileSync("src/redesign.css", "utf8");
@@ -10,6 +11,8 @@ describe("LeapSign task-oriented interface", () => {
     expect(app).toContain("Crear proceso y obtener enlace");
     expect(app).toContain("Mis documentos");
     expect(app).toContain("Cola de firmas");
+    expect(app).toContain("Procesos anteriores");
+    expect(app).toContain("Ir al seguimiento de este proceso");
     expect(app).not.toContain("Tus documentos, en orden.");
   });
 
@@ -27,14 +30,46 @@ describe("LeapSign task-oriented interface", () => {
   });
 
   it("keeps secondary information progressively disclosed", () => {
-    expect(app).toContain('details className="contact-picker"');
+    expect(app).toContain('details className="contact-picker" open');
     expect(app).toContain('details className="history-disclosure"');
     expect(app).toContain('details className="issue-disclosure"');
+  });
+
+  it("moves creation through distinct create, share and tracking stages", () => {
+    expect(app).toContain('"create" | "share" | "track"');
+    expect(app).toContain('creationStage === "share"');
+    expect(app).toContain('creationStage === "track"');
+    expect(app).toContain('creationStage !== "share"');
+  });
+
+  it("asks for a signer target and explains the indefinite option", () => {
+    expect(app).toContain("¿Cuántas personas deben firmar?");
+    expect(app).toContain("No lo sé todavía");
+    expect(app).toContain('form.set("expectedSignatures"');
   });
 
   it("defines visible focus and responsive mobile layouts", () => {
     expect(redesign).toContain(":focus-visible");
     expect(redesign).toContain("@media (max-width: 600px)");
     expect(redesign).toContain("grid-template-columns: 1fr");
+  });
+});
+
+describe("compact signing links", () => {
+  const id = "f5cb323f-7901-4e8d-866c-d228e2d5a554";
+
+  it("shortens a UUID without losing information", () => {
+    const compact = compactRoundId(id);
+    expect(compact).toHaveLength(22);
+    expect(expandRoundId(compact)).toBe(id);
+    expect(roundPath(id)).toBe(`/r/${compact}`);
+  });
+
+  it("keeps existing UUID links compatible", () => {
+    expect(expandRoundId(id.toUpperCase())).toBe(id);
+  });
+
+  it("rejects malformed identifiers", () => {
+    expect(expandRoundId("not-a-process")).toBe("");
   });
 });

@@ -15,6 +15,7 @@ body:has(.admin-shell), body:has(.admin-login), body:has(.admin-loading-page) { 
 .admin-login input, .admin-modal input, .admin-modal textarea { width:100%; padding:13px 14px; border:1px solid #cfdad3; border-radius:10px; font:inherit; }
 .admin-login button, .admin-content button:not(.admin-secondary), .admin-modal button:not(.admin-secondary) { border:0; border-radius:9px; padding:11px 15px; background:var(--admin-green); color:#fff; font-weight:750; cursor:pointer; }
 .admin-login form > button { width:100%; margin-top:8px; }
+.admin-login .admin-link-button { display:block; margin:14px auto 0; padding:5px 2px; background:transparent; color:#276b58; text-decoration:underline; text-underline-offset:3px; }
 .admin-login button:disabled { opacity:.55; cursor:wait; }
 .admin-qr { display:grid; place-items:center; gap:8px; margin:20px 0; padding:18px; border-radius:14px; background:#f5f8f6; }
 .admin-qr img { width:190px; height:190px; }
