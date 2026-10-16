@@ -1,17 +1,22 @@
 const removableWords = new Set([
   "firmado", "firmada", "firmados", "firmadas", "firma", "signed", "signature",
-  "sign", "final", "copia", "copy", "digital", "electronica", "electronico",
+  "sign", "signing", "final", "finalizado", "finalizada", "version", "copia", "copy",
+  "digital", "electronica", "electronico", "electronic", "electronically", "esign",
+  "esigned", "completed", "complete", "executed", "validado", "validada", "validated",
+  "aprobado", "aprobada", "approved", "certified", "sellado", "sellada", "stamped",
+  "escaneado", "escaneada", "scanned", "scan", "docusign", "adobesign", "smallpdf",
 ]);
 
 export function safeDocumentName(value: string) {
-  const stem = value.replace(/\.pdf$/i, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 150) || "documento";
+  const stem = value.replace(/\.pdf$/i, "").normalize("NFC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ")
+    .replace(/^[. ]+|[. ]+$/g, "").slice(0, 150).trim() || "Documento";
   return `${stem}.pdf`;
 }
 
 function normalize(value: string) {
   return value.replace(/\.pdf$/i, "").replace(/\s*\(\d+\)\s*$/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    .split(/[^a-z0-9]+/).filter(word => word && !removableWords.has(word)).join("");
+    .split(/[^a-z0-9]+/).filter(word => word && !removableWords.has(word) && !/^v\d+$/.test(word)).join("");
 }
 
 function editDistance(first: string, second: string) {
@@ -32,8 +37,7 @@ export function validateRelatedDocumentName(expected: string, candidate: string)
   const longest = Math.max(expectedName.length, candidateName.length);
   const related = Boolean(expectedName && candidateName) && (
     expectedName === candidateName
-    || (Math.min(expectedName.length, candidateName.length) >= 5 && (expectedName.includes(candidateName) || candidateName.includes(expectedName)))
-    || (longest >= 5 && 1 - editDistance(expectedName, candidateName) / longest >= 0.68)
+    || (longest >= 5 && 1 - editDistance(expectedName, candidateName) / longest >= 0.70)
   );
-  if (!related) throw new Error(`El nombre del archivo no se parece al documento descargado (${safeDocumentName(expected)}). Conserva el nombre y añade, si quieres, “firmado” o “signed”.`);
+  if (!related) throw new Error("El nombre del archivo que intentas subir no corresponde al nombre original.");
 }

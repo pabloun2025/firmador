@@ -38,7 +38,8 @@ describe("coherent signing lifecycle", () => {
 
   it("rejects an unrelated upload filename on the server", () => {
     expect(submit).toContain("validateRelatedDocumentName");
-    expect(names).toContain("El nombre del archivo no se parece al documento descargado");
+    expect(names).toContain("El nombre del archivo que intentas subir no corresponde al nombre original");
+    expect(names).toContain(">= 0.70");
     expect(download).toContain("expectedFilename");
   });
 

@@ -39,7 +39,7 @@ Deno.serve(async request => {
     if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw new Error('El archivo no es un PDF legible.');
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: workflow, error: workflowError } = await admin.from('workflows').insert({ owner_id: user.id, title, message, mode: 'directed', original_filename: safeDocumentName(document.name) }).select('id').single();
+    const { data: workflow, error: workflowError } = await admin.from('workflows').insert({ owner_id: user.id, title, message, mode: 'directed', original_filename: safeDocumentName(title) }).select('id').single();
     if (workflowError || !workflow) throw new Error('No se pudo crear el flujo.');
     const path = `${workflow.id}/0.pdf`;
     const rollback = async () => { await admin.storage.from('firmador-documents').remove([path]); await admin.from('workflows').delete().eq('id', workflow.id); };

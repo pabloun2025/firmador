@@ -1,7 +1,23 @@
 const removableWords = new Set([
   "firmado", "firmada", "firmados", "firmadas", "firma", "signed", "signature",
-  "sign", "final", "copia", "copy", "digital", "electronica", "electronico",
+  "sign", "signing", "final", "finalizado", "finalizada", "version", "copia", "copy",
+  "digital", "electronica", "electronico", "electronic", "electronically", "esign",
+  "esigned", "completed", "complete", "executed", "validado", "validada", "validated",
+  "aprobado", "aprobada", "approved", "certified", "sellado", "sellada", "stamped",
+  "escaneado", "escaneada", "scanned", "scan", "docusign", "adobesign", "smallpdf",
 ]);
+
+export function documentFilename(value: string) {
+  const stem = value
+    .replace(/\.pdf$/i, "")
+    .normalize("NFC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[. ]+|[. ]+$/g, "")
+    .slice(0, 150)
+    .trim();
+  return `${stem || "Documento"}.pdf`;
+}
 
 export function normalizeDocumentName(value: string) {
   return value
@@ -11,7 +27,7 @@ export function normalizeDocumentName(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((word) => word && !removableWords.has(word))
+    .filter((word) => word && !removableWords.has(word) && !/^v\d+$/.test(word))
     .join("");
 }
 
@@ -38,8 +54,6 @@ export function isRelatedDocumentName(expected: string, candidate: string) {
   const candidateName = normalizeDocumentName(candidate);
   if (!expectedName || !candidateName) return false;
   if (expectedName === candidateName) return true;
-  if (Math.min(expectedName.length, candidateName.length) >= 5
-      && (expectedName.includes(candidateName) || candidateName.includes(expectedName))) return true;
   const longest = Math.max(expectedName.length, candidateName.length);
-  return longest >= 5 && 1 - editDistance(expectedName, candidateName) / longest >= 0.68;
+  return longest >= 5 && 1 - editDistance(expectedName, candidateName) / longest >= 0.70;
 }

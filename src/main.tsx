@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
-import { isRelatedDocumentName } from "./lib/document-name";
+import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -860,7 +860,7 @@ function RoundAccess({ id }: { id: string }) {
                         if (file && expectedFilename && !isRelatedDocumentName(expectedFilename, file.name)) {
                           setSignedDocument(null);
                           setNoticeTarget("submission"); setNoticeTone("error");
-                          setNotice(`El archivo debe conservar un nombre parecido a “${expectedFilename}”. Puedes añadir “firmado” o “signed”, pero no sustituirlo por un nombre diferente.`);
+                          setNotice("El nombre del archivo que intentas subir no corresponde al nombre original.");
                           e.target.value = "";
                         } else if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
                           setSignedDocument(null);
@@ -882,7 +882,7 @@ function RoundAccess({ id }: { id: string }) {
                       <small>
                         {signedDocument
                           ? `${Math.ceil(signedDocument.size / 1024)} KB`
-                          : expectedFilename ? `PDF · conserva un nombre parecido a ${expectedFilename}` : "PDF · máximo 10 MB"}
+                          : "PDF · máximo 10 MB"}
                       </small>
                     </span>
                   </label>
@@ -2061,9 +2061,9 @@ function App() {
               placeholder="Ej. Presupuesto 2026"
               onChange={(e) => setTitle(e.target.value)}
             />
-            <small className="filename-preview">Este nombre identifica el proceso · {title.length}/80</small>
+            <small className="filename-preview">Se descargará como <strong>{documentFilename(title)}</strong> · {title.length}/80</small>
           </label>
-          {document && <p className="filename-policy"><Icon name="shield" size={14} /> Las descargas conservarán un nombre basado en <strong>{document.name}</strong>. Las copias firmadas deberán mantener un nombre parecido.</p>}
+          {document && <p className="filename-policy"><Icon name="shield" size={14} /> Los firmantes descargarán el archivo como <strong>{documentFilename(title)}</strong>.</p>}
           <label className={`upload ${document ? "has-file" : ""}`}>
             <input
               type="file"
