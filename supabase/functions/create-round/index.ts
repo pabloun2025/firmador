@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { inspectPdf } from '../_shared/pdf-validation.ts';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const encoder = new TextEncoder();
@@ -18,11 +19,11 @@ Deno.serve(async request => {
     const expectedRaw = String(form.get('expectedSignatures') ?? '').trim();
     const expectedSignatureCount = expectedRaw ? Number(expectedRaw) : null;
     const document = form.get('document');
-    if (!title || title.length > 120 || message.length > 500 || !(document instanceof File)) throw new Error('Datos de ronda inválidos.');
+    if (!title || title.length > 80 || message.length > 500 || !(document instanceof File)) throw new Error('El nombre debe tener entre 1 y 80 caracteres.');
     if (expectedSignatureCount !== null && (!Number.isInteger(expectedSignatureCount) || expectedSignatureCount < 1 || expectedSignatureCount > 20)) throw new Error('La cantidad prevista debe estar entre 1 y 20.');
     if (document.size === 0 || document.size > 10 * 1024 * 1024) throw new Error('El PDF debe pesar como máximo 10 MB.');
     const bytes = new Uint8Array(await document.arrayBuffer());
-    if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw new Error('El archivo no es un PDF legible.');
+    const profile = await inspectPdf(bytes);
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const { data: settings } = await admin.from('system_settings').select('maintenance_mode').eq('singleton', true).single();
     if (settings?.maintenance_mode) throw new Error('LeapSign está en mantenimiento. Inténtalo más tarde.');
@@ -32,7 +33,7 @@ Deno.serve(async request => {
     const { error: uploadError } = await admin.storage.from('firmador-documents').upload(path, bytes, { contentType: 'application/pdf', upsert: false });
     if (uploadError) { await admin.from('workflows').delete().eq('id', workflow.id); throw new Error('No se pudo guardar el PDF.'); }
     const creatorName = ([user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(' ').trim() || user.user_metadata?.full_name || user.email || 'Creador del proceso').slice(0, 120);
-    const { data: version, error: versionError } = await admin.from('document_versions').insert({ workflow_id: workflow.id, sequence: 0, storage_path: path, sha256: digest, byte_size: document.size, submitted_by_name: creatorName, submitted_by_email: user.email ?? null }).select('id').single();
+    const { data: version, error: versionError } = await admin.from('document_versions').insert({ workflow_id: workflow.id, sequence: 0, storage_path: path, sha256: digest, byte_size: document.size, page_count: profile.pageCount, page_dimensions: profile.pageDimensions, validation_summary: { mode: 'structural_profile', pageCount: profile.pageCount }, submitted_by_name: creatorName, submitted_by_email: user.email ?? null }).select('id').single();
     if (versionError || !version) { await admin.storage.from('firmador-documents').remove([path]); await admin.from('workflows').delete().eq('id', workflow.id); throw new Error('No se pudo registrar el PDF.'); }
     const { error: currentVersionError } = await admin.from('workflows').update({ current_version_id: version.id }).eq('id', workflow.id).eq('owner_id', user.id);
     if (currentVersionError) { await admin.storage.from('firmador-documents').remove([path]); await admin.from('workflows').delete().eq('id', workflow.id); throw new Error('No se pudo preparar el documento.'); }

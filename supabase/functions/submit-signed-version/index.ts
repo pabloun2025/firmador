@@ -1,11 +1,12 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { comparePdfProfiles, inspectPdf, validateRelatedSize } from "../_shared/pdf-validation.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-const hash = async (bytes: ArrayBuffer) =>
+const hash = async (bytes: BufferSource) =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
     .map((x) => x.toString(16).padStart(2, "0"))
     .join("");
@@ -20,38 +21,6 @@ const escapeHtml = (value: string) =>
   );
 const render = (template: string, variables: Record<string,string>) => Object.entries(variables).reduce((result,[key,value]) => result.replaceAll(`{{${key}}}`, value), template);
 const paragraphs = (value: string) => value.split(/\n{2,}/).map(part => `<p style="line-height:1.65;color:#53665e">${escapeHtml(part).replaceAll('\n','<br>')}</p>`).join('');
-async function notifyNext(
-  admin: ReturnType<typeof createClient>,
-  workflowId: string,
-  next: { email?: string; holder_name?: string; token?: string } | null,
-) {
-  const [{ data: settings }, { data: template }] = await Promise.all([
-    admin.from("system_settings").select("email_master_enabled,email_turn_enabled").eq("singleton", true).single(),
-    admin.from("email_templates").select("subject_template,body_template,enabled").eq("template_key", "turn_ready").single(),
-  ]);
-  if (!settings?.email_master_enabled || !settings.email_turn_enabled || !template?.enabled) return;
-  const key = Deno.env.get("RESEND_API_KEY");
-  const from = Deno.env.get("RESEND_FROM_EMAIL");
-  if (!next?.email || !next.token || !key || !from) return;
-  const link = `https://firma.veryfacil.org/r/${workflowId}?turn=${encodeURIComponent(next.token)}`;
-  const variables = { name: String(next.holder_name ?? "Participante"), title: "", link };
-  const subject = render(template.subject_template, variables);
-  const body = render(template.body_template, variables);
-  const html = `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Turno disponible</p><h1 style="margin:10px 0 16px;font-size:28px">El documento ha avanzado hasta ti</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Abrir mi documento</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Documento privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
-  await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [next.email],
-      subject,
-      html,
-    }),
-  });
-}
 
 async function notifyOwnerWhenComplete(
   admin: ReturnType<typeof createClient>,
@@ -129,9 +98,8 @@ Deno.serve(async (request) => {
       throw new Error("El archivo debe ser un PDF.");
     if (!document.size || document.size > 10 * 1024 * 1024)
       throw new Error("El PDF debe pesar como máximo 10 MB.");
-    const bytes = await document.arrayBuffer();
-    if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-")
-      throw new Error("El archivo no parece ser un PDF válido.");
+    const bytes = new Uint8Array(await document.arrayBuffer());
+    const candidateProfile = await inspectPdf(bytes);
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -155,7 +123,7 @@ Deno.serve(async (request) => {
     }
     const { data: parent } = await admin
       .from("document_versions")
-      .select("sha256,byte_size")
+      .select("sha256,byte_size,storage_path,page_count,page_dimensions")
       .eq("id", workflow.current_version_id)
       .maybeSingle();
     if (!parent)
@@ -165,18 +133,23 @@ Deno.serve(async (request) => {
       throw new Error(
         "El archivo es igual a la versión anterior. Descarga el PDF, fírmalo y vuelve a cargar la copia resultante.",
       );
-    if (document.size <= Number(parent.byte_size))
-      throw new Error(
-        `El PDF firmado debe pesar más que la versión anterior (${Math.ceil(Number(parent.byte_size) / 1024)} KB). Selecciona la copia que generó FirmaEC o Adobe.`,
-      );
+    validateRelatedSize(Number(parent.byte_size), document.size);
+    const { data: parentBlob, error: parentDownloadError } = await admin.storage.from("firmador-documents").download(parent.storage_path);
+    if (parentDownloadError || !parentBlob) throw new Error("No pudimos comprobar el documento vigente.");
+    const parentProfile = parent.page_count && Array.isArray(parent.page_dimensions) && parent.page_dimensions.length
+      ? { pageCount: Number(parent.page_count), pageDimensions: parent.page_dimensions }
+      : await inspectPdf(new Uint8Array(await parentBlob.arrayBuffer()));
+    comparePdfProfiles(parentProfile, candidateProfile);
     const { data: lock } = await admin
       .from("open_round_locks")
-      .select("version_id_at_claim,expires_at")
+      .select("version_id_at_claim,expires_at,reviewed_version_at")
       .eq("workflow_id", id)
       .eq("holder_session_hash", sessionHash)
       .maybeSingle();
     if (!lock || new Date(lock.expires_at).getTime() <= Date.now())
       throw new Error("Tu turno ya no está activo.");
+    if (!lock.reviewed_version_at)
+      throw new Error("Descarga primero el documento vigente antes de incorporar la copia firmada.");
     if (lock.version_id_at_claim !== workflow.current_version_id)
       throw new Error(
         "Hay una versión más reciente del documento. Vuelve a abrir tu turno.",
@@ -207,6 +180,9 @@ Deno.serve(async (request) => {
           storage_path: path,
           sha256: digest,
           byte_size: document.size,
+          page_count: candidateProfile.pageCount,
+          page_dimensions: candidateProfile.pageDimensions,
+          validation_summary: { mode: "structural_profile", pageCount: candidateProfile.pageCount, sizeRelation: "accepted" },
           submitted_by_session_hash: sessionHash,
           status: "uploaded",
         });
@@ -226,10 +202,7 @@ Deno.serve(async (request) => {
     if (acceptError || !accepted?.ok)
       throw new Error("No pudimos incorporar el documento firmado.");
     await admin.from("round_invitations").update({ status: "completed", completed_at: new Date().toISOString() }).eq("workflow_id", id).eq("session_hash", sessionHash).in("status", ["pending", "opened"]);
-    await Promise.allSettled([
-      notifyNext(admin, id, accepted.next ?? null),
-      notifyOwnerWhenComplete(admin, id),
-    ]);
+    await Promise.allSettled([notifyOwnerWhenComplete(admin, id)]);
     return Response.json({ state: "accepted" }, { headers: cors });
   } catch (error) {
     return Response.json(

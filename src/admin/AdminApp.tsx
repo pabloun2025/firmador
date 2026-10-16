@@ -323,7 +323,7 @@ function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard
   const [settings, setSettings] = useState({ ...dashboard.settings });
   const [editing, setEditing] = useState<EmailTemplate | null>(null);
   const toggles = [
-    ["email_master_enabled", "Envío general de correos"], ["email_invitations_enabled", "Invitaciones"], ["email_queue_enabled", "Confirmaciones de cola"], ["email_turn_enabled", "Avisos de turno"], ["email_completion_enabled", "Objetivo de firmas alcanzado"], ["automatic_cleanup_enabled", "Procesamiento de purgas"], ["maintenance_mode", "Modo mantenimiento"],
+    ["email_master_enabled", "Envío general de correos"], ["email_invitations_enabled", "Invitaciones"], ["email_reminders_enabled", "Recordatorios a 1 y 24 horas"], ["email_completion_enabled", "Objetivo de firmas alcanzado"], ["automatic_cleanup_enabled", "Procesamiento de purgas"], ["maintenance_mode", "Modo mantenimiento"],
   ];
   async function saveSettings() {
     const reason = window.prompt("Motivo del cambio de configuración:"); if (!reason) return;

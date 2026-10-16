@@ -45,5 +45,6 @@ jobs:
         run: |
           set -euo pipefail
           for function_dir in supabase/functions/*; do
+            [[ "$(basename "$function_dir")" == _* ]] && continue
             supabase functions deploy "$(basename "$function_dir")" --project-ref "$SUPABASE_PROJECT_REF"
           done

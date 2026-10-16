@@ -1,0 +1,4 @@
+project_id = "lgsdoutarthfymbjgdrj"
+
+[functions.process-lifecycle-jobs]
+verify_jwt = false

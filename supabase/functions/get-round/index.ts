@@ -14,15 +14,23 @@ Deno.serve(async request => {
     if (!round || round.status !== 'active') throw new Error('Esta ronda no está disponible.');
     let privateInvite = false;
     if (inviteToken) {
-      const { data: invitation } = await admin.from('round_invitations').select('id,status,expires_at').eq('workflow_id', id).eq('token_hash', await hash(inviteToken)).maybeSingle();
+      const tokenHash = await hash(inviteToken);
+      let { data: invitation } = await admin.from('round_invitations').select('id,status,expires_at').eq('workflow_id', id).eq('token_hash', tokenHash).maybeSingle();
+      if (!invitation) {
+        const { data: reminderToken } = await admin.from('round_invitation_tokens')
+          .select('invitation:round_invitations!inner(id,status,expires_at,workflow_id)')
+          .eq('token_hash', tokenHash).eq('invitation.workflow_id', id).gt('expires_at', new Date().toISOString()).maybeSingle();
+        invitation = (Array.isArray(reminderToken?.invitation) ? reminderToken.invitation[0] : reminderToken?.invitation) ?? null;
+      }
       if (!invitation) throw new Error('La invitación no es válida.');
       if (invitation.status === 'completed') throw new Error('Esta invitación ya fue completada. No es posible firmar dos veces con el mismo enlace.');
       if (new Date(invitation.expires_at).getTime() <= Date.now()) throw new Error('La invitación ha caducado. Solicita una nueva al creador.');
       privateInvite = ['pending', 'opened', 'cancelled'].includes(invitation.status);
       if (!privateInvite) throw new Error('Esta invitación ya no está disponible.');
     }
+    if (!privateInvite && round.group_key_hash && !groupKey) return Response.json({ needsKey: true }, { headers: cors });
     if (!privateInvite && round.group_key_hash && round.group_key_hash !== await hash(groupKey)) throw new Error('La clave no es correcta.');
-    return Response.json({ title: round.title, message: round.message, needsKey: Boolean(round.group_key_hash) }, { headers: cors });
+    return Response.json({ title: round.title, message: round.message, needsKey: false }, { headers: cors });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: 400, headers: cors });
   }

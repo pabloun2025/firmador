@@ -60,9 +60,8 @@ describe("operational switches", () => {
   it("are consulted by every notification path", () => {
     for (const file of [
       "supabase/functions/send-round-invitations/index.ts",
-      "supabase/functions/take-open-turn/index.ts",
       "supabase/functions/submit-signed-version/index.ts",
-      "supabase/functions/owner-round-action/index.ts",
+      "supabase/functions/process-lifecycle-jobs/index.ts",
     ]) {
       const source = readFileSync(file, "utf8");
       expect(source).toMatch(/from\(["']system_settings["']\)/);

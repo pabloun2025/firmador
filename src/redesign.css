@@ -234,7 +234,7 @@ label {
 .create-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  overflow: hidden;
+  overflow: visible;
   border-radius: 20px;
 }
 
@@ -1320,9 +1320,11 @@ label {
 .creation-progress {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: -19px -19px 19px;
+  margin: 0 0 22px;
   padding: 0;
-  border-bottom: 1px solid #dbe7e0;
+  overflow: hidden;
+  border: 1px solid #dbe7e0;
+  border-radius: 11px;
   background: #fff;
   list-style: none;
 }
@@ -1341,7 +1343,8 @@ label {
   border-left: 1px solid #e4ebe7;
 }
 
-.creation-progress li > span {
+.creation-progress li > span,
+.creation-progress li button > span {
   display: grid;
   place-items: center;
   width: 22px;
@@ -1353,6 +1356,22 @@ label {
   font-weight: 750;
 }
 
+.creation-progress li button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.creation-progress li button:hover small { text-decoration: underline; }
+
 .creation-progress li small {
   font-size: 10px;
   font-weight: 650;
@@ -1362,10 +1381,76 @@ label {
   color: #477063;
 }
 
-.creation-progress li.complete > span {
+.creation-progress li.complete > span,
+.creation-progress li.complete button > span {
   border-color: #94b9a7;
   background: #eaf5ee;
   color: #23614c;
+}
+
+.filename-preview {
+  display: block;
+  margin-top: 6px;
+  color: #718079;
+  font-size: 11px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.optional-key {
+  margin: 17px 0;
+  padding: 13px 14px;
+  border: 1px solid #d9e1dc;
+  border-radius: 11px;
+  background: #f3f4f3;
+  transition: background .2s, border-color .2s;
+}
+
+.optional-key.enabled { border-color: #a9c9b9; background: #f4faf6; }
+.optional-key .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0; }
+.optional-key .switch-row span { display: grid; gap: 3px; }
+.optional-key .switch-row small { color: #748179; font-weight: 500; line-height: 1.4; }
+.optional-key .switch-row input { width: 42px; min-height: 23px; accent-color: var(--forest); }
+.optional-key > label:last-child { display: grid; margin: 14px 0 0; }
+
+.tracking-navigation { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 18px; }
+.tracking-guidance { margin: 18px 0; padding: 18px; border: 1px solid #bdd7ca; border-radius: 13px; background: #f2f8f4; }
+.tracking-guidance h4 { margin: 3px 0 5px; font-size: 17px; }
+.tracking-guidance p { margin: 0; color: #5d7067; font-size: 12px; line-height: 1.55; }
+.invitation-statuses { margin: 20px 0; }
+.invitation-statuses ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.invitation-statuses li { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 11px 13px; border: 1px solid #e0e8e3; border-radius: 10px; }
+.invitation-statuses li > span:first-child { display: grid; gap: 2px; }
+.invitation-statuses li small { color: #728078; font-size: 10px; }
+.invite-state { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #eef3f0; color: #536b61; font-size: 10px; font-weight: 700; }
+.invite-completed { background: #e5f5ea; color: #22633e; }
+.invite-opened { background: #fff5d8; color: #755917; }
+
+.waiting-room { margin: 18px 0; padding: 22px; border: 1px solid #c9dcd2; border-radius: 15px; background: linear-gradient(180deg,#f7fbf8,#eef6f1); text-align: center; }
+.waiting-live { display: inline-flex; align-items: center; gap: 7px; color: #39705e; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #28a46c; box-shadow: 0 0 0 0 rgba(40,164,108,.45); animation: queuePulse 1.6s infinite; }
+.waiting-room h2 { margin: 10px 0 2px; font-size: 20px; }
+.waiting-position { display: block; color: #145845; font-size: 44px; line-height: 1; }
+.waiting-room > p { margin: 3px 0 13px; color: #5d6f67; font-size: 12px; }
+.queue-motion { position: relative; height: 6px; margin: 16px 0 10px; overflow: hidden; border-radius: 999px; background: #dbe7e0; }
+.queue-motion span { position: absolute; inset: 0; width: 45%; border-radius: inherit; background: #1e7159; animation: queueMove 2.2s ease-in-out infinite alternate; }
+.queue-motion i { position: absolute; top: -3px; left: 42%; width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: #e3bd55; animation: queueMoveDot 2.2s ease-in-out infinite alternate; }
+.waiting-room > small { color: #687a72; font-size: 10px; }
+@keyframes queuePulse { 70% { box-shadow: 0 0 0 7px rgba(40,164,108,0); } 100% { box-shadow: 0 0 0 0 rgba(40,164,108,0); } }
+@keyframes queueMove { from { transform: translateX(-20%); } to { transform: translateX(145%); } }
+@keyframes queueMoveDot { from { transform: translateX(-120px); } to { transform: translateX(120px); } }
+
+.queue-game { margin-top: 17px; border-top: 1px solid #d8e5de; padding-top: 12px; text-align: left; }
+.queue-game summary { display: flex; justify-content: center; gap: 8px; color: #155b48; cursor: pointer; font-size: 11px; font-weight: 700; }
+.queue-game summary span { color: #809087; font-weight: 500; }
+.queue-game-body { margin-top: 11px; padding: 13px; border-radius: 11px; background: #fff; }
+.queue-game-head { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 11px; }
+.queue-game canvas { display: block; width: 100%; height: auto; border: 1px solid #e2eae5; border-radius: 8px; background: #fbfdfb; }
+.queue-game-body p { margin: 8px 0; color: #6c7a73; font-size: 10px; }
+.queue-game-body > div:last-child { display: flex; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot, .queue-motion span, .queue-motion i { animation-duration: 8s; }
 }
 
 .creation-progress li.current {
@@ -1660,6 +1745,16 @@ label {
   .tracking-handoff-actions {
     display: grid;
   }
+
+  .tracking-navigation,
+  .invitation-statuses li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tracking-navigation .signout { width: 100%; }
+
+  .invite-state { align-self: flex-start; }
 }
 
 @media (max-width: 520px) {

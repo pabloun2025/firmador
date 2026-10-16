@@ -375,6 +375,72 @@ function LegalPage({ page }: { page: keyof typeof LEGAL_CONTENT }) {
   );
 }
 
+function FrogQueueGame() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const jumpRef = useRef<() => void>(() => undefined);
+  const [playing, setPlaying] = useState(false);
+  const [score, setScore] = useState(0);
+  useEffect(() => {
+    if (!playing) return;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    let frame = 0;
+    let frogY = 0;
+    let velocity = 0;
+    let obstacleX = canvas.width;
+    let raf = 0;
+    const jump = () => { if (frogY === 0) velocity = 8.2; };
+    jumpRef.current = jump;
+    const key = (event: KeyboardEvent) => {
+      if (event.code === "Space" || event.code === "ArrowUp") { event.preventDefault(); jump(); }
+    };
+    window.addEventListener("keydown", key);
+    const draw = () => {
+      frame += 1;
+      velocity -= .42;
+      frogY = Math.max(0, frogY + velocity);
+      if (frogY === 0) velocity = 0;
+      obstacleX -= 3.2;
+      if (obstacleX < -18) { obstacleX = canvas.width + 25 + Math.random() * 90; setScore((value) => value + 1); }
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.strokeStyle = "#cbdad3"; context.lineWidth = 2;
+      context.beginPath(); context.moveTo(0, 87); context.lineTo(canvas.width, 87); context.stroke();
+      context.fillStyle = "#125746";
+      context.beginPath(); context.arc(38, 72 - frogY, 13, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#f3d37b";
+      context.beginPath(); context.arc(33, 68 - frogY, 2, 0, Math.PI * 2); context.arc(43, 68 - frogY, 2, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#a86f35"; context.fillRect(obstacleX, 65, 15, 22);
+      const collision = obstacleX < 51 && obstacleX + 15 > 25 && frogY < 20;
+      if (collision) { setPlaying(false); return; }
+      raf = window.requestAnimationFrame(draw);
+    };
+    raf = window.requestAnimationFrame(draw);
+    return () => { window.cancelAnimationFrame(raf); window.removeEventListener("keydown", key); };
+  }, [playing]);
+  return <details className="queue-game">
+    <summary>Jugar mientras espero <span>Opcional</span></summary>
+    <div className="queue-game-body">
+      <div className="queue-game-head"><strong>Salto de la rana</strong><span>Puntos: {score}</span></div>
+      <canvas ref={canvasRef} width={420} height={105} aria-label="Minijuego de salto de la rana" />
+      <p>Salta con la barra espaciadora, la flecha ↑ o el botón. La cola sigue actualizándose.</p>
+      <div><button type="button" className="signout" onClick={() => { setScore(0); setPlaying(true); }}>{playing ? "Reiniciar" : score ? "Volver a jugar" : "Empezar"}</button><button type="button" className="primary" disabled={!playing} onClick={() => jumpRef.current()}>Saltar</button></div>
+    </div>
+  </details>;
+}
+
+function WaitingRoom({ position, lastChecked }: { position: number; lastChecked: Date | null }) {
+  return <section className="waiting-room" aria-live="polite">
+    <div className="waiting-live"><span className="live-dot" /> Estado en directo</div>
+    <h2>Estás en la cola</h2>
+    <strong className="waiting-position">{Math.max(0, position - 1)}</strong>
+    <p>{position <= 1 ? "Eres la siguiente persona." : `personas delante de ti`}</p>
+    <div className="queue-motion" aria-hidden="true"><span /><i /></div>
+    <small>Comprobación automática cada 5 segundos{lastChecked ? ` · última ${lastChecked.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}</small>
+    <FrogQueueGame />
+  </section>;
+}
+
 function RoundAccess({ id }: { id: string }) {
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
@@ -384,6 +450,11 @@ function RoundAccess({ id }: { id: string }) {
   const [signedDocument, setSignedDocument] = useState<File | null>(null);
   const [reviewedPrevious, setReviewedPrevious] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [needsKey, setNeedsKey] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [parentByteSize, setParentByteSize] = useState<number | null>(null);
+  const [lastQueueCheck, setLastQueueCheck] = useState<Date | null>(null);
   const [round, setRound] = useState<{ title: string; message: string } | null>(
     null,
   );
@@ -391,7 +462,6 @@ function RoundAccess({ id }: { id: string }) {
     state: string;
     position?: number;
     expires_at?: string;
-    pdfUrl?: string;
   } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [turnExpired, setTurnExpired] = useState(false);
@@ -413,10 +483,10 @@ function RoundAccess({ id }: { id: string }) {
     localStorage.getItem("firmador-turn") || crypto.randomUUID();
   localStorage.setItem("firmador-turn", sessionId);
   useEffect(() => {
-    if ((!queueToken && !turnToken && !inviteToken) || round || autoOpened) return;
+    if (round || autoOpened) return;
     setAutoOpened(true);
     void loadRound("");
-  }, [queueToken, turnToken, inviteToken, round, autoOpened]);
+  }, [round, autoOpened]);
   useEffect(() => {
     if ((!queueToken && !turnToken && !inviteToken) || !round || autoRestored) return;
     setAutoRestored(true);
@@ -463,10 +533,16 @@ function RoundAccess({ id }: { id: string }) {
           : "No pudimos abrir este documento. Comprueba la clave.",
       ));
     } else {
-      setKey(groupKey);
-      setRound(data);
-      setNotice("");
+      if (data.needsKey) {
+        setNeedsKey(true);
+      } else {
+        setNeedsKey(false);
+        setKey(groupKey);
+        setRound(data);
+        setNotice("");
+      }
     }
+    setAccessChecked(true);
     setBusy(false);
   }
   async function takeTurn() {
@@ -504,6 +580,23 @@ function RoundAccess({ id }: { id: string }) {
       setTurn(data);
       if (data.holder_name) setName(data.holder_name);
       if (data.email) setEmail(data.email);
+      setNotice("");
+      setLastQueueCheck(new Date());
+    }
+    setBusy(false);
+  }
+  async function downloadCurrentDocument() {
+    setBusy(true);
+    const s = await getSupabase();
+    const { data, error } = await s.functions.invoke("participant-download-version", { body: { id, sessionId } });
+    if (error || !data?.url) {
+      setNoticeTarget("submission");
+      setNoticeTone("error");
+      setNotice(await functionError(error, data?.error || "No pudimos preparar la descarga."));
+    } else {
+      setDownloaded(true);
+      setParentByteSize(Number(data.parentByteSize));
+      window.open(data.url, "_blank", "noopener");
       setNotice("");
     }
     setBusy(false);
@@ -599,6 +692,10 @@ function RoundAccess({ id }: { id: string }) {
     }
     setBusy(false);
   }
+  if (!round && (!accessChecked || busy) && !needsKey)
+    return <main className="round"><Brand /><section className="round-card"><p className="round-loading">Abriendo el acceso seguro…</p></section></main>;
+  if (!round && !needsKey)
+    return <main className="round"><Brand /><section className="round-card"><span className="file-chip warning"><Icon name="file" size={14} /> Acceso no disponible</span><h1>No pudimos abrir este enlace</h1><p className="round-lead">Puede haber caducado, haberse completado o corresponder a un proceso que ya está cerrado.</p><Notice message={notice} tone="error" /></section></main>;
   if (!round)
     return (
       <main className="round">
@@ -608,13 +705,10 @@ function RoundAccess({ id }: { id: string }) {
             <Icon name="file" size={14} /> Documento privado
           </span>
           <h1>Abre el documento</h1>
-          <p className="round-lead">
-            Introduce la clave que te facilitó el creador. Si tu enlace es
-            personal, podrás continuar directamente.
-          </p>
+          <p className="round-lead">Este documento está protegido. Introduce la clave que te facilitó el creador.</p>
           <form onSubmit={openRound}>
             <label>
-              Clave de acceso <em>Solo si te la solicitaron</em>
+              Clave de acceso
               <input
                 type="password"
                 value={key}
@@ -701,15 +795,9 @@ function RoundAccess({ id }: { id: string }) {
                     <h3>Descarga el documento</h3>
                     <p>Guarda la versión vigente en tu dispositivo.</p>
                   </div>
-                  <a
-                    className="primary task-action"
-                    href={turn.pdfUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    download
-                  >
-                    <Icon name="download" size={18} /> Descargar PDF
-                  </a>
+                  <button type="button" className="primary task-action" onClick={downloadCurrentDocument} disabled={busy}>
+                    <Icon name="download" size={18} /> {downloaded ? "Descargar de nuevo" : "Descargar PDF"}
+                  </button>
                 </div>
               </li>
               <li className="signer-task">
@@ -737,7 +825,16 @@ function RoundAccess({ id }: { id: string }) {
                     <input
                       type="file"
                       accept="application/pdf,.pdf"
-                      onChange={(e) => setSignedDocument(e.target.files?.[0] ?? null)}
+                      disabled={!downloaded}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
+                          setSignedDocument(null);
+                          setNoticeTarget("submission"); setNoticeTone("error");
+                          setNotice("Este archivo tiene un tamaño muy distinto al PDF descargado. Comprueba que seleccionaste el documento correcto.");
+                          e.target.value = "";
+                        } else setSignedDocument(file);
+                      }}
                     />
                     <span className="upload-icon">
                       <Icon name="upload" />
@@ -746,7 +843,7 @@ function RoundAccess({ id }: { id: string }) {
                       <strong>
                         {signedDocument
                           ? signedDocument.name
-                          : "Seleccionar PDF firmado"}
+                          : downloaded ? "Seleccionar PDF firmado" : "Descarga primero el documento"}
                       </strong>
                       <small>
                         {signedDocument
@@ -758,6 +855,7 @@ function RoundAccess({ id }: { id: string }) {
                   <label className="review-check">
                     <input
                       type="checkbox"
+                      disabled={!downloaded}
                       checked={reviewedPrevious}
                       onChange={(e) => setReviewedPrevious(e.target.checked)}
                     />
@@ -769,7 +867,7 @@ function RoundAccess({ id }: { id: string }) {
                   <button
                     className="primary wide"
                     onClick={submitSignedVersion}
-                    disabled={busy}
+                    disabled={busy || !downloaded || !signedDocument || !reviewedPrevious}
                   >
                     {busy ? "Subiendo PDF…" : "Subir PDF firmado y completar mi turno"}
                   </button>
@@ -868,15 +966,10 @@ function RoundAccess({ id }: { id: string }) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Te avisaremos cuando sea tu turno"
+            placeholder="Opcional para identificarte"
           />
         </label>
-        {turn?.state === "waiting" && (
-          <p className="queue">
-            <strong>Estás en la cola · posición {turn.position}</strong>
-            <span>Esta página comprueba tu turno automáticamente. Si indicaste tu correo, también recibirás un aviso.</span>
-          </p>
-        )}
+        {turn?.state === "waiting" && <WaitingRoom position={turn.position ?? 1} lastChecked={lastQueueCheck} />}
         <button className="primary wide" onClick={takeTurn} disabled={busy}>
           {turn?.state === "waiting"
             ? "Comprobar si ya es mi turno"
@@ -1074,7 +1167,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
     </div>
   );
 }
-function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
+function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, onShowArchive }: { highlightRoundId?: string; focusOnly?: boolean; onBackToShare?: () => void; onShowArchive?: () => void }) {
   const [rounds, setRounds] = useState<OwnerRound[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [notice, setNotice] = useState("");
@@ -1127,9 +1220,9 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
       action === "purge"
         ? "Eliminarás permanentemente este proceso, sus versiones y sus archivos privados. Esta acción no se puede deshacer. ¿Continuar?"
         : action === "rollback"
-          ? "Volverás a esta versión. Las posteriores se eliminarán y se liberará el turno activo. ¿Continuar?"
+          ? "Volverás a esta versión. Las posteriores se retirarán y se programará su eliminación; también se liberará el turno activo. ¿Continuar?"
           : action === "finalize"
-            ? "Aceptarás esta versión como final. Las anteriores se eliminarán y el proceso se cerrará. Esta acción no se puede deshacer. ¿Continuar?"
+            ? "Aceptarás esta versión como final y el proceso se cerrará. Las anteriores se conservarán hasta 48 horas y la final durante 5 días. ¿Continuar?"
             : "";
     if ((action === "purge" || irreversible) && !window.confirm(warning))
       return;
@@ -1152,7 +1245,7 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
     } else {
       setNotice(
         action === "release_turn"
-          ? "Turno liberado; se avisará a la siguiente persona."
+          ? "Turno liberado. La cola avanzará automáticamente."
           : action === "skip_next"
             ? "La primera persona en espera fue retirada de la cola."
             : action === "pause"
@@ -1200,6 +1293,10 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
   const previousRounds = rounds.filter((round) =>
     round.status !== "active" && round.status !== "paused_error",
   );
+  const invitationStatus = (invitation: any) => invitation.status === "completed"
+    ? "Firma completada" : invitation.status === "opened"
+      ? (selected?.activeTurn?.holder_email === invitation.email ? "Firmando ahora" : selected?.queue?.some((item: any) => item.email === invitation.email) ? "En la cola" : "Enlace abierto")
+      : invitation.status === "cancelled" ? "Caducada o cerrada" : invitation.email_error ? "Envío con incidencia" : "Invitación enviada";
   const renderRoundList = (items: OwnerRound[]) => (
     <div className="owner-list">
       {items.map((round) => (
@@ -1240,15 +1337,15 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
     <section className="owner-panel" id="mis-documentos">
       <div className="owner-panel-head">
         <div>
-          <span className="section-kicker">Actividad</span>
-          <h2>Mis documentos</h2>
-          <p>Consulta el estado de cada proceso y gestiona sus firmas.</p>
+          <span className="section-kicker">{focusOnly ? "Proceso actual" : "Actividad"}</span>
+          <h2>{focusOnly ? "Seguimiento" : "Mis documentos"}</h2>
+          <p>{focusOnly ? "Consulta el avance y las acciones que requieren tu atención." : "Consulta el estado de cada proceso y gestiona sus firmas."}</p>
         </div>
         <button className="signout" onClick={loadRounds}>
           <Icon name="refresh" size={16} /> Actualizar
         </button>
       </div>
-      {rounds.length === 0 ? (
+      {!focusOnly && (rounds.length === 0 ? (
         <p className="empty-state">Todavía no has creado ningún proceso.</p>
       ) : (
         <div className="process-groups">
@@ -1261,9 +1358,10 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
             {renderRoundList(previousRounds)}
           </details>}
         </div>
-      )}
+      ))}
       {selected && (
         <div className="owner-detail">
+          {focusOnly && <div className="tracking-navigation"><button type="button" className="signout" onClick={onBackToShare}>← Volver a compartir</button><button type="button" className="signout" onClick={onShowArchive}>Ir a procesos anteriores</button></div>}
           <div className="owner-detail-top">
             <div>
               <span className={`status-badge status-${selected.workflow.status}`}>{statusText(selected.workflow.status)}</span>
@@ -1338,6 +1436,15 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
               </dd>
             </div>
           </dl>
+          {focusOnly && <section className="tracking-guidance">
+            <span className="section-kicker">Próximo paso</span>
+            <h4>{selected.workflow.status === "completed" ? "Descarga y conserva el documento final" : selected.activeTurn ? "Una persona está firmando ahora" : selected.queue.length ? "La cola avanza automáticamente" : "Comparte el enlace para recibir firmas"}</h4>
+            <p>{selected.workflow.status === "completed" ? `La copia final estará disponible hasta ${selected.workflow.final_file_delete_at ? new Date(selected.workflow.final_file_delete_at).toLocaleString() : "cinco días después del cierre"}.` : selected.activeTurn ? "No necesitas hacer nada. Si el turno vence, quedará disponible para la siguiente persona." : selected.queue.length ? "Puedes revisar abajo quién espera y actuar solo si alguien informa una incidencia." : "Vuelve a Compartir para copiar el enlace o enviar invitaciones."}</p>
+          </section>}
+          {focusOnly && selected.invitations?.length > 0 && <section className="invitation-statuses">
+            <div className="subsection-heading"><div><span className="section-kicker">Invitaciones</span><h4>Estado de los participantes</h4></div></div>
+            <ul>{selected.invitations.map((invitation: any) => <li key={invitation.id}><span><strong>{invitation.holder_name}</strong><small>{invitation.email}</small></span><span className={`invite-state invite-${invitation.status}`}>{invitationStatus(invitation)}</span></li>)}</ul>
+          </section>}
           <section className="signature-queue" aria-labelledby="queue-title">
             <div className="subsection-heading">
               <div>
@@ -1368,7 +1475,7 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
               ))}
             </ol>
           </section>
-          {selected.workflow.status === "active" && <section className="share-round">
+          {!focusOnly && selected.workflow.status === "active" && <section className="share-round">
             <div className="subsection-heading">
               <div>
                 <span className="section-kicker">Participantes</span>
@@ -1432,7 +1539,7 @@ function OwnerPanel({ highlightRoundId = "" }: { highlightRoundId?: string }) {
               <Icon name="clock" size={18} />
               <div>
                 <strong>Conservación y plazos</strong>
-                <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a los 30 días o al completar la firma. Las copias descartadas dejan de estar disponibles de inmediato y su eliminación técnica se completa en un máximo de 48 horas.</p>
+                <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a las 48 horas o al completar la firma. Cada versión sustituida permanece disponible para ti hasta 48 horas; al cerrar el proceso, el PDF final se conserva durante 5 días.</p>
               </div>
             </aside>
             {previousVersions.length > 0 && <details className="history-disclosure">
@@ -1495,6 +1602,7 @@ function App() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [key, setKey] = useState("");
+  const [protectWithKey, setProtectWithKey] = useState(false);
   const [expectedSignatures, setExpectedSignatures] = useState("2");
   const [indefiniteSigners, setIndefiniteSigners] = useState(false);
   const [document, setDocument] = useState<File | null>(null);
@@ -1548,6 +1656,7 @@ function App() {
     setTitle("");
     setMessage("");
     setKey("");
+    setProtectWithKey(false);
     setExpectedSignatures("2");
     setIndefiniteSigners(false);
     setDocument(null);
@@ -1679,6 +1788,8 @@ function App() {
     if (!session) return;
     if (!title.trim() || !document)
       return setNotice("Añade un nombre y el PDF para continuar.");
+    if (protectWithKey && key.trim().length < 4)
+      return setNotice("La clave del documento debe tener al menos 4 caracteres.");
     const expected = Number(expectedSignatures);
     if (!indefiniteSigners && (!Number.isInteger(expected) || expected < 1 || expected > 20))
       return setNotice("Indica entre 1 y 20 personas, o marca que la cantidad es indefinida.");
@@ -1689,7 +1800,7 @@ function App() {
     const form = new FormData();
     form.set("title", title);
     form.set("message", message);
-    form.set("groupKey", key);
+    form.set("groupKey", protectWithKey ? key : "");
     form.set("expectedSignatures", indefiniteSigners ? "" : String(expected));
     form.set("document", document);
     const supabase = await getSupabase();
@@ -1873,10 +1984,11 @@ function App() {
             Nombre del documento
             <input
               value={title}
-              maxLength={120}
+              maxLength={80}
               placeholder="Ej. Presupuesto 2026"
               onChange={(e) => setTitle(e.target.value)}
             />
+            <small className="filename-preview">Se descargará como <strong>{`${title.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "documento"}.pdf`}</strong> · {title.length}/80</small>
           </label>
           <label className={`upload ${document ? "has-file" : ""}`}>
             <input
@@ -1902,7 +2014,7 @@ function App() {
             <span>2</span>
             <div>
               <h3>Configura el acceso</h3>
-              <p>El mensaje y la clave son opcionales.</p>
+              <p>Añade un mensaje y decide si el enlace general necesita una clave.</p>
             </div>
           </div>
           <label>
@@ -1914,15 +2026,10 @@ function App() {
               onChange={(e) => setMessage(e.target.value)}
             />
           </label>
-          <label>
-            Clave de acceso <em>Opcional</em>
-            <input
-              type="password"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="Clave para el enlace"
-            />
-          </label>
+          <div className={`optional-key ${protectWithKey ? "enabled" : ""}`}>
+            <label className="switch-row"><span><strong>Proteger el enlace general con una clave</strong><small>Las invitaciones personales entran directamente y no muestran esta clave.</small></span><input type="checkbox" role="switch" checked={protectWithKey} onChange={(event) => { setProtectWithKey(event.target.checked); if (!event.target.checked) setKey(""); }} /></label>
+            {protectWithKey && <label>Clave de acceso<input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Escribe la clave que compartirás" autoFocus /></label>}
+          </div>
           <fieldset className="signer-target">
             <legend>¿Cuántas personas deben firmar?</legend>
             <p>Te avisaremos por correo cuando se alcance esta cantidad.</p>
@@ -1971,7 +2078,7 @@ function App() {
         {creationStage === "share" && createdLink && (
           <div className="share-link" role="region" aria-label="Proceso creado" ref={createdResultRef} tabIndex={-1}>
             <ol className="creation-progress" aria-label="Progreso del proceso">
-              <li className="complete"><span><Icon name="check" size={13} /></span><small>Documento</small></li>
+              <li className="complete"><button type="button" onClick={startNewProcess}><span><Icon name="check" size={13} /></span><small>Documento</small></button></li>
               <li className="current"><span>2</span><small>Compartir e invitar</small></li>
               <li><span>3</span><small>Dar seguimiento</small></li>
             </ol>
@@ -2012,14 +2119,14 @@ function App() {
         {creationStage === "track" && createdLink && (
           <div className="tracking-handoff" role="status">
             <ol className="creation-progress" aria-label="Progreso del proceso">
-              <li className="complete"><span><Icon name="check" size={13} /></span><small>Documento</small></li>
-              <li className="complete"><span><Icon name="check" size={13} /></span><small>Compartir</small></li>
+              <li className="complete"><button type="button" onClick={startNewProcess}><span><Icon name="check" size={13} /></span><small>Documento</small></button></li>
+              <li className="complete"><button type="button" onClick={() => setCreationStage("share")}><span><Icon name="check" size={13} /></span><small>Compartir</small></button></li>
               <li className="current"><span>3</span><small>Seguimiento</small></li>
             </ol>
             <div>
               <span className="section-kicker">Proceso activo</span>
               <h2>{createdRoundTitle}</h2>
-              <p>El seguimiento está abierto debajo. Desde allí puedes consultar firmas, compartir de nuevo el enlace y administrar las versiones.</p>
+              <p>Consulta el estado de las invitaciones, la cola, las firmas y las versiones de este proceso.</p>
             </div>
             <div className="tracking-handoff-actions">
               <button type="button" className="signout" onClick={startNewProcess}>Crear otro proceso</button>
@@ -2029,7 +2136,7 @@ function App() {
         )}
         <Notice message={notice} />
       </section>
-      {creationStage !== "share" && <OwnerPanel highlightRoundId={creationStage === "track" ? createdRoundId : ""} />}
+      {creationStage !== "share" && <OwnerPanel highlightRoundId={creationStage === "track" ? createdRoundId : ""} focusOnly={creationStage === "track"} onBackToShare={() => { setCreationStage("share"); window.setTimeout(() => createdResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 30); }} onShowArchive={() => { setCreationStage("create"); window.setTimeout(() => window.document.getElementById("mis-documentos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30); }} />}
     </main>
   );
 }

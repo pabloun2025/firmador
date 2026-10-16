@@ -12,122 +12,6 @@ const hash = async (v: string) =>
   ]
     .map((x) => x.toString(16).padStart(2, "0"))
     .join("");
-const downloadName = (title: string, sequence: number) =>
-  `${
-    title
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9_-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 80) || "documento"
-  }_${String(sequence).padStart(2, "0")}.pdf`;
-const escapeHtml = (value: string) =>
-  value.replace(
-    /[&<>'"]/g,
-    (char) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[
-        char
-      ]!,
-  );
-const emailFrame = (content: string) =>
-  `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p>${content}<hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Documento privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
-const render = (template: string, variables: Record<string,string>) => Object.entries(variables).reduce((result,[key,value]) => result.replaceAll(`{{${key}}}`, value), template);
-const paragraphs = (value: string) => value.split(/\n{2,}/).map(part => `<p style="line-height:1.65;color:#53665e">${escapeHtml(part).replaceAll('\n','<br>')}</p>`).join('');
-async function notifyWaitlisted(
-  admin: ReturnType<typeof createClient>,
-  workflowId: string,
-  sessionHash: string,
-  email: string,
-  name: string,
-) {
-  const [{ data: settings }, { data: template }] = await Promise.all([
-    admin.from("system_settings").select("email_master_enabled,email_queue_enabled").eq("singleton", true).single(),
-    admin.from("email_templates").select("subject_template,body_template,enabled").eq("template_key", "waitlisted").single(),
-  ]);
-  if (!settings?.email_master_enabled || !settings.email_queue_enabled || !template?.enabled) return;
-  const dedupeKey = `waitlisted:${workflowId}:${sessionHash}`;
-  const { data: existing } = await admin
-    .from("open_round_notifications")
-    .select("id,status,attempts")
-    .eq("dedupe_key", dedupeKey)
-    .maybeSingle();
-  const { data: savedAccess } = await admin
-    .from("open_round_access_links")
-    .select("access_token_hash")
-    .eq("workflow_id", workflowId)
-    .eq("session_hash", sessionHash)
-    .maybeSingle();
-  if (existing?.status === "sent" && savedAccess) return;
-  const notification =
-    existing ??
-    (
-      await admin
-        .from("open_round_notifications")
-        .insert({
-          workflow_id: workflowId,
-          session_hash: sessionHash,
-          email,
-          kind: "waitlisted",
-          dedupe_key: dedupeKey,
-        })
-        .select("id,status,attempts")
-        .single()
-    ).data;
-  if (!notification) return;
-  const key = Deno.env.get("RESEND_API_KEY");
-  const from = Deno.env.get("RESEND_FROM_EMAIL");
-  if (!key || !from) return;
-  const accessToken = crypto.randomUUID();
-  const { error: accessError } = await admin
-    .from("open_round_access_links")
-    .upsert(
-      {
-        workflow_id: workflowId,
-        session_hash: sessionHash,
-        access_token_hash: await hash(accessToken),
-        holder_name: name,
-        email,
-        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      { onConflict: "workflow_id,session_hash" },
-    );
-  if (accessError) throw accessError;
-  const link = `https://firma.veryfacil.org/r/${workflowId}?queue=${encodeURIComponent(accessToken)}`;
-  const variables = { name, title: "", link };
-  const subject = render(template.subject_template, variables);
-  const body = render(template.body_template, variables);
-  const html = emailFrame(
-    `<p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Solicitud recibida</p><h1 style="margin:10px 0 16px;font-size:28px">Estás en la cola de firma</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Consultar mi turno</a></p>`,
-  );
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": `firmador-waitlisted-${notification.id}-${(notification.attempts ?? 0) + 1}`,
-    },
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject,
-      html,
-    }),
-  });
-  const attempts = (notification.attempts ?? 0) + 1;
-  await admin
-    .from("open_round_notifications")
-    .update(
-      response.ok
-        ? {
-            status: "sent",
-            sent_at: new Date().toISOString(),
-            attempts,
-            error_code: null,
-          }
-        : { status: "failed", error_code: String(response.status), attempts },
-    )
-    .eq("id", notification.id);
-}
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -220,31 +104,8 @@ Deno.serve(async (req) => {
       if (transferError)
         console.error("No se pudo transferir el enlace de consulta", transferError.code);
     }
-    if (turn.state === "waiting" && normalizedEmail)
-      await notifyWaitlisted(
-        admin,
-        id,
-        sessionHash,
-        normalizedEmail,
-        holderName,
-      );
-    if (turn.state === "active") {
-      const { data: v, error: e } = await admin
-        .from("document_versions")
-        .select("storage_path,sequence")
-        .eq("workflow_id", id)
-        .order("sequence", { ascending: false })
-        .limit(1)
-        .single();
-      if (e) throw new Error(e.message);
-      const { data: l, error: le } = await admin.storage
-        .from("firmador-documents")
-        .createSignedUrl(v.storage_path, 600, {
-          download: downloadName(round.title, v.sequence),
-        });
-      if (le) throw new Error(le.message);
-      turn.pdfUrl = l.signedUrl;
-    }
+    // Queue and turn-ready emails were deliberately removed. The invitation
+    // remains the durable access route and scheduled reminders cover inactivity.
     turn.holder_name = holderName;
     turn.email = normalizedEmail;
     return Response.json(turn, { headers: cors });

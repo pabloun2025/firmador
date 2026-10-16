@@ -100,32 +100,6 @@ const render = (template: string, variables: Record<string, string>) =>
 const paragraphs = (value: string) => value.split(/\n{2,}/).map((part) => `<p style="line-height:1.65;color:#53665e">${escapeHtml(part).replaceAll("\n", "<br>")}</p>`).join("");
 const emailFrame = (content: string) => `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p>${content}<hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Documento privado · No reenvíes este correo ni el enlace de acceso.</p></main></div>`;
 
-async function sendTurnReady(context: AdminContext, workflowId: string, next: Record<string, unknown> | null) {
-  if (!next?.email || !next?.token) return;
-  const [{ data: settings }, { data: template }] = await Promise.all([
-    context.db.from("system_settings").select("email_master_enabled,email_turn_enabled").eq("singleton", true).single(),
-    context.db.from("email_templates").select("subject_template,body_template,enabled").eq("template_key", "turn_ready").single(),
-  ]);
-  if (!settings?.email_master_enabled || !settings.email_turn_enabled || !template?.enabled) return;
-  const key = Deno.env.get("RESEND_API_KEY");
-  const from = Deno.env.get("RESEND_FROM_EMAIL");
-  if (!key || !from) return;
-  const name = String(next.holder_name || "Participante");
-  const link = `https://firma.veryfacil.org/r/${workflowId}?turn=${encodeURIComponent(String(next.token))}`;
-  const subject = render(template.subject_template, { name, title: "", link });
-  const body = render(template.body_template, { name, title: "", link });
-  await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from,
-      to: [String(next.email)],
-      subject,
-      html: emailFrame(`${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Abrir mi documento</a></p>`),
-    }),
-  });
-}
-
 async function removeWorkflowFiles(db: SupabaseClient, workflowId: string) {
   const paths: string[] = [];
   const root = await db.storage.from("firmador-documents").list(workflowId, { limit: 1000 });
@@ -144,7 +118,7 @@ async function dashboard(context: AdminContext) {
     context.db.rpc("superadmin_metrics"),
     context.db.auth.admin.listUsers({ page: 1, perPage: 1 }),
     context.db.from("system_settings").select("*").eq("singleton", true).single(),
-    context.db.from("email_templates").select("template_key,label,subject_template,body_template,enabled,updated_at").order("template_key"),
+    context.db.from("email_templates").select("template_key,label,subject_template,body_template,enabled,updated_at").in("template_key", ["invitation", "reminder_1h", "reminder_24h", "owner_completed"]).order("template_key"),
     context.db.from("superadmin_audit_log").select("id,admin_email,action,target_type,target_id,reason,metadata,created_at").order("created_at", { ascending: false }).limit(40),
   ]);
   if (metricsError) throw metricsError;
@@ -210,7 +184,7 @@ async function listWorkflows(context: AdminContext, payload: Record<string, unkn
 }
 
 async function updateSettings(context: AdminContext, payload: Record<string, unknown>) {
-  const allowed = ["email_master_enabled", "email_invitations_enabled", "email_queue_enabled", "email_turn_enabled", "email_completion_enabled", "automatic_cleanup_enabled", "maintenance_mode"];
+  const allowed = ["email_master_enabled", "email_invitations_enabled", "email_reminders_enabled", "email_completion_enabled", "automatic_cleanup_enabled", "maintenance_mode"];
   const changes: Record<string, boolean | string> = { updated_at: new Date().toISOString() };
   for (const key of allowed) if (typeof payload[key] === "boolean") changes[key] = payload[key] as boolean;
   if (Object.keys(changes).length === 1) throw new HttpError("No hay cambios válidos.");
@@ -223,7 +197,7 @@ async function updateSettings(context: AdminContext, payload: Record<string, unk
 
 async function updateTemplate(context: AdminContext, payload: Record<string, unknown>) {
   const key = text(payload.template_key, 40);
-  if (!(["invitation", "waitlisted", "turn_ready"] as string[]).includes(key)) throw new HttpError("Plantilla no válida.");
+  if (!(["invitation", "reminder_1h", "reminder_24h", "owner_completed"] as string[]).includes(key)) throw new HttpError("Plantilla no válida.");
   const subject = text(payload.subject_template, 160);
   const body = text(payload.body_template, 3000);
   if (!subject || !body) throw new HttpError("Completa el asunto y el mensaje.");
@@ -284,7 +258,6 @@ async function workflowAction(context: AdminContext, payload: Record<string, unk
       p_action: action,
     });
     if (error) throw error;
-    if (action === "release_turn") await sendTurnReady(context, workflowId, data?.next ?? null);
     return { ok: true, result: data };
   }
   if (action === "cancel") {
@@ -295,6 +268,12 @@ async function workflowAction(context: AdminContext, payload: Record<string, unk
       context.db.from("open_round_waitlist").delete().eq("workflow_id", workflowId),
       context.db.from("round_invitations").update({ status: "cancelled" }).eq("workflow_id", workflowId).in("status", ["pending", "opened"]),
     ]);
+    const { data: versions } = await context.db.from("document_versions").select("id,storage_path").eq("workflow_id", workflowId).is("discarded_at", null);
+    const deleteAfter = new Date(Date.now() + 60 * 60_000).toISOString();
+    for (const version of versions ?? []) {
+      await context.db.from("document_versions").update({ delete_after: deleteAfter }).eq("id", version.id);
+      await context.db.from("file_cleanup_jobs").upsert({ workflow_id: workflowId, storage_path: version.storage_path, reason: "cancelled", scheduled_for: deleteAfter, status: "pending" }, { onConflict: "storage_path" });
+    }
     return { ok: true };
   }
   const filesRemoved = await removeWorkflowFiles(context.db, workflowId);
@@ -308,7 +287,7 @@ async function runCleanup(context: AdminContext, payload: Record<string, unknown
   const { data: settings } = await context.db.from("system_settings").select("automatic_cleanup_enabled").eq("singleton", true).single();
   if (!settings?.automatic_cleanup_enabled) throw new HttpError("El procesamiento de purgas está desactivado.");
   await audit(context, "cleanup_run_requested", "cleanup", "pending", reason);
-  const { data: jobs, error } = await context.db.from("file_cleanup_jobs").select("id,storage_path").in("status", ["pending", "failed"]).order("created_at").limit(100);
+  const { data: jobs, error } = await context.db.from("file_cleanup_jobs").select("id,storage_path").in("status", ["pending", "failed"]).lte("scheduled_for", new Date().toISOString()).order("scheduled_for").limit(100);
   if (error) throw error;
   let removed = 0;
   let failed = 0;
