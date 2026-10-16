@@ -51,6 +51,19 @@ button:disabled {
   opacity: 0.52;
 }
 
+button,
+.primary,
+.signout,
+.text-button,
+input,
+textarea,
+select,
+.upload,
+.owner-round,
+.tracking-section {
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
 .primary,
 .signout,
 .danger-button,
@@ -68,6 +81,7 @@ button:disabled {
 
 .primary:hover:not(:disabled) {
   box-shadow: 0 8px 20px rgba(18, 77, 64, 0.18);
+  transform: translateY(-1px);
 }
 
 .signout {
@@ -75,6 +89,12 @@ button:disabled {
   color: #405f54;
   font-size: 13px;
   font-weight: 620;
+}
+
+.signout:hover:not(:disabled) {
+  border-color: #a9c3b7;
+  background: #f5faf7;
+  color: var(--forest);
 }
 
 .text-button {
@@ -109,7 +129,7 @@ button:disabled {
 .workspace,
 .legal-page {
   max-width: 1120px;
-  padding-top: 28px;
+  padding-top: 20px;
 }
 
 .auth-grid {
@@ -178,6 +198,19 @@ select {
   font-size: 14px;
 }
 
+input:hover:not(:disabled),
+textarea:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: #abc0b5;
+}
+
+.field-label {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-height: 18px;
+}
+
 textarea {
   min-height: 90px;
 }
@@ -206,24 +239,28 @@ label {
 
 /* Owner workspace */
 .workspace {
-  max-width: 1040px;
+  max-width: 1080px;
 }
 
 .workspace > .brand {
-  margin-bottom: 52px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(211, 225, 217, .8);
 }
 
 .workspace-head {
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .workspace-head h1 {
-  font-size: clamp(30px, 4vw, 38px);
-  letter-spacing: -1.6px;
+  font-size: clamp(29px, 3.5vw, 35px);
+  line-height: 1.08;
+  letter-spacing: -1.35px;
 }
 
 .workspace-head p {
+  margin-top: 4px;
   color: #75847d;
 }
 
@@ -235,13 +272,15 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: visible;
-  border-radius: 20px;
+  border-radius: 18px;
+  box-shadow: 0 16px 46px rgba(24, 61, 49, .07);
 }
 
 .create-card-head {
   grid-column: 1 / -1;
-  padding: 26px 30px 22px;
+  padding: 22px 28px 19px;
   border-bottom: 1px solid #e9efeb;
+  background: linear-gradient(180deg, #fff, #fcfdfc);
 }
 
 .create-card-head h2 {
@@ -258,7 +297,7 @@ label {
 }
 
 .form-section {
-  padding: 24px 30px 27px;
+  padding: 22px 28px 25px;
   border-bottom: 1px solid #e9efeb;
 }
 
@@ -267,7 +306,7 @@ label {
 }
 
 .step-title {
-  margin-bottom: 17px;
+  margin-bottom: 15px;
 }
 
 .step-title > span {
@@ -300,6 +339,11 @@ label {
   background: #f4f9f6;
 }
 
+.upload:focus-within {
+  border-color: #4f8975;
+  box-shadow: 0 0 0 4px rgba(78, 137, 118, .12);
+}
+
 .create-action,
 .process-disclaimer,
 .share-link,
@@ -308,7 +352,7 @@ label {
 }
 
 .create-action {
-  padding: 21px 30px;
+  padding: 18px 28px;
 }
 
 .create-action .primary {
@@ -316,7 +360,7 @@ label {
 }
 
 .process-disclaimer {
-  margin: 0 30px 25px;
+  margin: 0 28px 23px;
   padding: 12px 14px;
   border: 0;
   border-left: 3px solid #9cb9aa;
@@ -368,9 +412,9 @@ label {
 
 /* Document list and management */
 .owner-panel {
-  margin-top: 22px;
-  padding: 27px 30px;
-  border-radius: 20px;
+  margin-top: 18px;
+  padding: 25px 28px;
+  border-radius: 18px;
 }
 
 .owner-panel-head {
@@ -394,6 +438,11 @@ label {
 
 .owner-round {
   border-radius: 10px;
+}
+
+.owner-round:hover {
+  border-color: #b8cec2;
+  box-shadow: 0 7px 20px rgba(24, 61, 49, .05);
 }
 
 .owner-round-open {
@@ -777,11 +826,13 @@ label {
 /* Signer experience */
 .round {
   max-width: 920px;
-  padding: 28px 24px 56px;
+  padding: 20px 24px 50px;
 }
 
 .round .brand {
-  margin-bottom: 48px;
+  margin-bottom: 28px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(211, 225, 217, .8);
 }
 
 .round-card {
@@ -1118,11 +1169,12 @@ label {
 
   .workspace > .brand,
   .round .brand {
-    margin-bottom: 35px;
+    margin-bottom: 20px;
   }
 
   .workspace-head {
     align-items: flex-start;
+    margin-bottom: 16px;
   }
 
   .workspace-head h1 {
@@ -1423,6 +1475,38 @@ label {
 .optional-key .switch-row span { display: grid; gap: 3px; }
 .optional-key .switch-row small { color: #748179; font-weight: 500; line-height: 1.4; }
 .optional-key .switch-row input { width: 42px; min-height: 23px; accent-color: var(--forest); }
+.optional-key .switch-row input[role="switch"] {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  padding: 2px;
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #bdcac3;
+  border-radius: 999px;
+  background: #dfe5e1;
+  cursor: pointer;
+}
+.optional-key .switch-row input[role="switch"]::before {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(25, 54, 45, .2);
+  transition: transform .18s ease;
+  content: "";
+}
+.optional-key .switch-row input[role="switch"]:checked {
+  border-color: var(--forest);
+  background: var(--forest);
+}
+.optional-key .switch-row input[role="switch"]:checked::before { transform: translateX(18px); }
 .optional-key > label:last-child { display: grid; margin: 14px 0 0; }
 
 .tracking-navigation { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 18px; }

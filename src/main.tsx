@@ -946,7 +946,7 @@ function RoundAccess({ id }: { id: string }) {
             </label>
             {issueReason === "Otro problema" && (
               <label>
-                Observación <em>Opcional</em>
+                <span className="field-label">Observación <em>Opcional</em></span>
                 <textarea
                   value={issueDetail}
                   maxLength={500}
@@ -995,7 +995,7 @@ function RoundAccess({ id }: { id: string }) {
           />
         </label>
         <label>
-          Correo <em>Opcional</em>
+          <span className="field-label">Correo <em>Opcional</em></span>
           <input
             type="email"
             value={email}
@@ -2092,7 +2092,7 @@ function App() {
             </div>
           </div>
           <label>
-            Mensaje <em>Opcional</em>
+            <span className="field-label">Mensaje <em>Opcional</em></span>
             <textarea
               value={message}
               maxLength={500}
