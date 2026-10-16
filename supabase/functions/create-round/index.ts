@@ -29,15 +29,32 @@ Deno.serve(async request => {
     const { data: settings } = await admin.from('system_settings').select('maintenance_mode').eq('singleton', true).single();
     if (settings?.maintenance_mode) throw new Error('LeapSign está en mantenimiento. Inténtalo más tarde.');
     const { data: workflow, error: workflowError } = await admin.from('workflows').insert({ owner_id: user.id, title, message, group_key_hash: groupKey ? await hash(groupKey) : null, expected_signature_count: expectedSignatureCount, original_filename: safeDocumentName(title) }).select('id').single();
-    if (workflowError) throw new Error('No se pudo crear la ronda.');
+    if (workflowError) {
+      console.error('create-round: workflow insert failed', workflowError.code, workflowError.message);
+      throw new Error('No se pudo crear el proceso. Inténtalo de nuevo.');
+    }
     const path = `${workflow.id}/0.pdf`; const digest = await hashBytes(bytes);
     const { error: uploadError } = await admin.storage.from('firmador-documents').upload(path, bytes, { contentType: 'application/pdf', upsert: false });
-    if (uploadError) { await admin.from('workflows').delete().eq('id', workflow.id); throw new Error('No se pudo guardar el PDF.'); }
+    if (uploadError) {
+      console.error('create-round: PDF upload failed', uploadError.message);
+      await admin.from('workflows').delete().eq('id', workflow.id);
+      throw new Error('No se pudo guardar el PDF. Inténtalo de nuevo.');
+    }
     const creatorName = ([user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(' ').trim() || user.user_metadata?.full_name || user.email || 'Creador del proceso').slice(0, 120);
     const { data: version, error: versionError } = await admin.from('document_versions').insert({ workflow_id: workflow.id, sequence: 0, storage_path: path, sha256: digest, byte_size: document.size, page_count: profile.pageCount, page_dimensions: profile.pageDimensions, validation_summary: { mode: 'structural_profile', pageCount: profile.pageCount }, submitted_by_name: creatorName, submitted_by_email: user.email ?? null }).select('id').single();
-    if (versionError || !version) { await admin.storage.from('firmador-documents').remove([path]); await admin.from('workflows').delete().eq('id', workflow.id); throw new Error('No se pudo registrar el PDF.'); }
+    if (versionError || !version) {
+      console.error('create-round: version insert failed', versionError?.code, versionError?.message);
+      await admin.storage.from('firmador-documents').remove([path]);
+      await admin.from('workflows').delete().eq('id', workflow.id);
+      throw new Error('No se pudo registrar el PDF. Inténtalo de nuevo.');
+    }
     const { error: currentVersionError } = await admin.from('workflows').update({ current_version_id: version.id }).eq('id', workflow.id).eq('owner_id', user.id);
-    if (currentVersionError) { await admin.storage.from('firmador-documents').remove([path]); await admin.from('workflows').delete().eq('id', workflow.id); throw new Error('No se pudo preparar el documento.'); }
+    if (currentVersionError) {
+      console.error('create-round: current version update failed', currentVersionError.code, currentVersionError.message);
+      await admin.storage.from('firmador-documents').remove([path]);
+      await admin.from('workflows').delete().eq('id', workflow.id);
+      throw new Error('No se pudo preparar el documento. Inténtalo de nuevo.');
+    }
     return Response.json({ id: workflow.id }, { headers: cors });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: 400, headers: cors }); }
 });

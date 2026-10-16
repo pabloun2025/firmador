@@ -1683,6 +1683,7 @@ function App() {
   const [creationStage, setCreationStage] = useState<"create" | "share" | "track">("create");
   const [busy, setBusy] = useState(false);
   const [authNoticeTone, setAuthNoticeTone] = useState<"info" | "error" | "success">("info");
+  const [workspaceNoticeTone, setWorkspaceNoticeTone] = useState<"info" | "error" | "success">("info");
   const createdResultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let unsubscribe = () => {};
@@ -1696,9 +1697,12 @@ function App() {
         unsubscribe = () => data.subscription.unsubscribe();
       })
       .catch(() =>
-        setNotice(
-          "No pudimos abrir tu espacio. Recarga la página e inténtalo de nuevo.",
-        ),
+        {
+          setWorkspaceNoticeTone("error");
+          setNotice(
+            "No pudimos abrir tu espacio. Recarga la página e inténtalo de nuevo.",
+          );
+        },
       );
     return () => unsubscribe();
   }, []);
@@ -1720,6 +1724,7 @@ function App() {
   }
   function finishInvitationStep(remaining?: number | null) {
     if (typeof remaining === "number" || remaining === null) setCreatedInviteCapacity(remaining);
+    setWorkspaceNoticeTone("success");
     setNotice("Invitaciones enviadas. Abriendo el seguimiento del proceso…");
     window.setTimeout(showCreatedProcess, 650);
   }
@@ -1735,6 +1740,7 @@ function App() {
     setCreatedRoundId("");
     setCreatedRoundTitle("");
     setCreatedInviteCapacity(2);
+    setWorkspaceNoticeTone("info");
     setNotice("");
     setCreationStage("create");
     window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 30);
@@ -1858,6 +1864,7 @@ function App() {
   }
   async function createRound() {
     if (!session) return;
+    setWorkspaceNoticeTone("error");
     if (!title.trim() || !document)
       return setNotice("Añade un nombre y el PDF para continuar.");
     if (protectWithKey && key.trim().length < 4)
@@ -1868,7 +1875,8 @@ function App() {
     setBusy(true);
     setCreatedLink("");
     setCreatedRoundId("");
-    setNotice("Preparando tu ronda…");
+    setWorkspaceNoticeTone("info");
+    setNotice("Preparando el proceso…");
     const form = new FormData();
     form.set("title", title);
     form.set("message", message);
@@ -1879,11 +1887,16 @@ function App() {
     const { data, error } = await supabase.functions.invoke("create-round", {
       body: form,
     });
-    if (error)
+    if (error) {
+      setWorkspaceNoticeTone("error");
       setNotice(
-        "No pudimos crear la ronda. Comprueba el PDF e inténtalo de nuevo.",
+        await functionError(
+          error,
+          "No pudimos crear el proceso. Comprueba el PDF e inténtalo de nuevo.",
+        ),
       );
-    else {
+    } else {
+      setWorkspaceNoticeTone("success");
       setNotice("");
       setCreatedRoundId(data.id);
       setCreatedRoundTitle(title.trim());
@@ -2172,8 +2185,14 @@ function App() {
                 onClick={() =>
                   navigator.clipboard
                     .writeText(createdLink)
-                    .then(() => setNotice("Enlace copiado."))
-                    .catch(() => setNotice("No se pudo copiar; selecciónalo manualmente."))
+                    .then(() => {
+                      setWorkspaceNoticeTone("success");
+                      setNotice("Enlace copiado.");
+                    })
+                    .catch(() => {
+                      setWorkspaceNoticeTone("error");
+                      setNotice("No se pudo copiar; selecciónalo manualmente.");
+                    })
                 }
               >
                 Copiar enlace
@@ -2208,7 +2227,7 @@ function App() {
             </div>
           </div>
         )}
-        <Notice message={notice} />
+        <Notice message={notice} tone={workspaceNoticeTone} />
       </section>
       {creationStage !== "share" && <OwnerPanel highlightRoundId={creationStage === "track" ? createdRoundId : ""} focusOnly={creationStage === "track"} onBackToShare={() => { setCreationStage("share"); window.setTimeout(() => createdResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 30); }} onShowArchive={() => { setCreationStage("create"); window.setTimeout(() => window.document.getElementById("mis-documentos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30); }} />}
     </main>

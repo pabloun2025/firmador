@@ -73,6 +73,13 @@ describe("LeapSign task-oriented interface", () => {
     expect(redesign).toMatch(/\.tracking-handoff\s*\{[^}]*padding:\s*0 30px 26px;/s);
   });
 
+  it("shows the real process-creation error with an error treatment", () => {
+    expect(app).toContain('await functionError(\n          error,\n          "No pudimos crear el proceso. Comprueba el PDF e inténtalo de nuevo."');
+    expect(app).toContain('<Notice message={notice} tone={workspaceNoticeTone} />');
+    expect(app).toContain('setWorkspaceNoticeTone("error")');
+    expect(app).not.toContain("No pudimos crear la ronda. Comprueba el PDF e inténtalo de nuevo.");
+  });
+
   it("defines visible focus and responsive mobile layouts", () => {
     expect(redesign).toContain(":focus-visible");
     expect(redesign).toContain("@media (max-width: 600px)");
