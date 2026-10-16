@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
 import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
+import { whatsappShareUrl } from "./lib/share";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -23,7 +24,8 @@ type IconName =
   | "shield"
   | "trash"
   | "upload"
-  | "users";
+  | "users"
+  | "whatsapp";
 const ICON_PATHS: Record<IconName, ReactNode> = {
   arrow: (
     <>
@@ -106,6 +108,12 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
       <circle cx="9" cy="9" r="3" />
       <circle cx="17" cy="8" r="2.5" />
       <path d="M3 20c.4-4 2.5-6 6-6s5.6 2 6 6M15 14c3.4 0 5.4 1.7 6 5" />
+    </>
+  ),
+  whatsapp: (
+    <>
+      <path d="M20.5 11.7a8.5 8.5 0 0 1-12.6 7.5L3.5 20.5l1.3-4.2A8.5 8.5 0 1 1 20.5 11.7Z" />
+      <path d="M8.4 7.7c.2-.4.4-.4.7-.4h.5c.2 0 .4.1.5.4l.8 1.9c.1.3 0 .5-.2.7l-.7.8c-.2.2-.1.4 0 .6.8 1.4 1.9 2.5 3.4 3.2.2.1.4.1.6-.1l.9-1.1c.2-.2.4-.3.7-.1l1.9.9c.3.1.4.3.4.6 0 .6-.3 1.5-.8 1.9-.5.5-1.3.8-2.1.8-1.2 0-3.1-.6-5.1-2.4-2.4-2.1-3.8-4.7-3.8-6.2 0-.6.1-1.1.3-1.5Z" />
     </>
   ),
 };
@@ -1552,7 +1560,13 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                 <p>Comparte el acceso general o envía invitaciones personales por correo.</p>
               </div>
             </div>
-            <div className="share-url"><input readOnly value={`${window.location.origin}${roundPath(selected.workflow.id)}`} aria-label="Enlace para solicitar un turno de firma" /><button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}${roundPath(selected.workflow.id)}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button></div>
+            <div className="share-url">
+              <input readOnly value={`${window.location.origin}${roundPath(selected.workflow.id)}`} aria-label="Enlace para solicitar un turno de firma" />
+              <div className="share-url-actions">
+                <button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}${roundPath(selected.workflow.id)}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button>
+                <a className="whatsapp-button" href={whatsappShareUrl(selected.workflow.title, `${window.location.origin}${roundPath(selected.workflow.id)}`, selected.workflow.message || "")} target="_blank" rel="noreferrer" aria-label={`Compartir ${selected.workflow.title} por WhatsApp`}><Icon name="whatsapp" size={18} /> Compartir por WhatsApp</a>
+              </div>
+            </div>
             <p className="share-help">El enlace estará disponible mientras el proceso siga en curso.</p>
             <InvitationComposer
               workflowId={selected.workflow.id}
@@ -2180,23 +2194,26 @@ function App() {
             <div className="created-url-block">
               <span>Enlace para firmar</span>
               <a className="created-url" href={createdLink} target="_blank" rel="noreferrer">{createdLink}</a>
-              <button
-                className="signout"
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(createdLink)
-                    .then(() => {
-                      setWorkspaceNoticeTone("success");
-                      setNotice("Enlace copiado.");
-                    })
-                    .catch(() => {
-                      setWorkspaceNoticeTone("error");
-                      setNotice("No se pudo copiar; selecciónalo manualmente.");
-                    })
-                }
-              >
-                Copiar enlace
-              </button>
+              <div className="created-url-actions">
+                <button
+                  className="signout"
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(createdLink)
+                      .then(() => {
+                        setWorkspaceNoticeTone("success");
+                        setNotice("Enlace copiado.");
+                      })
+                      .catch(() => {
+                        setWorkspaceNoticeTone("error");
+                        setNotice("No se pudo copiar; selecciónalo manualmente.");
+                      })
+                  }
+                >
+                  Copiar enlace
+                </button>
+                <a className="whatsapp-button" href={whatsappShareUrl(createdRoundTitle, createdLink, message)} target="_blank" rel="noreferrer" aria-label={`Compartir ${createdRoundTitle} por WhatsApp`}><Icon name="whatsapp" size={18} /> Compartir por WhatsApp</a>
+              </div>
             </div>
             {createdRoundId && <InvitationComposer workflowId={createdRoundId} remainingInvitations={createdInviteCapacity} onSent={finishInvitationStep} />}
             <div className="created-next-step">

@@ -1678,6 +1678,40 @@ label {
   line-height: 1.45;
 }
 
+.created-url-actions,
+.share-url-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.whatsapp-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid #1faa52;
+  border-radius: 9px;
+  background: #25d366;
+  color: #073c21;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-decoration: none;
+  box-shadow: 0 5px 14px rgba(37, 211, 102, .18);
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.whatsapp-button:hover {
+  border-color: #168a40;
+  background: #20c15d;
+  color: #052f1a;
+  box-shadow: 0 8px 20px rgba(37, 211, 102, .24);
+  transform: translateY(-1px);
+}
+
 .created-next-step {
   display: flex;
   align-items: center;
@@ -2007,13 +2041,22 @@ label {
   }
 
   .created-url-block > span,
-  .created-url-block .signout {
+  .created-url-block .created-url-actions {
     grid-column: 1;
   }
 
-  .created-url-block .signout {
+  .created-url-actions,
+  .share-url-actions {
+    display: grid;
+    grid-template-columns: 1fr;
     width: 100%;
-    margin-top: 5px;
+  }
+
+  .created-url-block .signout,
+  .created-url-block .whatsapp-button,
+  .share-url-actions .signout,
+  .share-url-actions .whatsapp-button {
+    width: 100%;
   }
 
   .round-list-meta .new-process-badge {

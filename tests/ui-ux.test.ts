@@ -68,6 +68,12 @@ describe("LeapSign task-oriented interface", () => {
     expect(redesign).toContain(".invitation-capacity");
   });
 
+  it("offers WhatsApp sharing beside the generated signing link", () => {
+    expect(app).toContain("Compartir por WhatsApp");
+    expect(app).toContain("whatsappShareUrl(createdRoundTitle, createdLink, message)");
+    expect(redesign).toContain(".whatsapp-button");
+  });
+
   it("keeps the tracking handoff aligned across the full card", () => {
     expect(redesign).toMatch(/\.tracking-handoff\s*\{[^}]*grid-column:\s*1 \/ -1;/s);
     expect(redesign).toMatch(/\.tracking-handoff\s*\{[^}]*padding:\s*0 30px 26px;/s);
