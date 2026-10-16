@@ -35,6 +35,20 @@ describe("LeapSign task-oriented interface", () => {
     expect(app).toContain('details className="issue-disclosure"');
   });
 
+  it("shows the queue game immediately and depicts a frog jumping PDFs", () => {
+    expect(app).toContain('className="queue-game"');
+    expect(app).toContain("Rana vs. documentos");
+    expect(app).toContain("saltando documentos PDF");
+    expect(app).not.toContain('<details className="queue-game">');
+  });
+
+  it("refreshes tracking periodically and collapses inactive sections", () => {
+    expect(app).toContain("20_000");
+    expect(app).toContain('className="tracking-section signature-queue"');
+    expect(app).toContain('className="tracking-section version-section"');
+    expect(redesign).toContain(".tracking-section > summary");
+  });
+
   it("moves creation through distinct create, share and tracking stages", () => {
     expect(app).toContain('"create" | "share" | "track"');
     expect(app).toContain('creationStage === "share"');

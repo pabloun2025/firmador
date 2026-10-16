@@ -1,5 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { comparePdfProfiles, inspectPdf, validateRelatedSize } from "../_shared/pdf-validation.ts";
+import { validateRelatedDocumentName } from "../_shared/document-name.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -108,7 +109,7 @@ Deno.serve(async (request) => {
     const sessionHash = await hashText(sessionId);
     const { data: workflow } = await admin
       .from("workflows")
-      .select("id,status,group_key_hash,current_version_id")
+      .select("id,status,group_key_hash,current_version_id,title,original_filename")
       .eq("id", id)
       .maybeSingle();
     if (
@@ -121,6 +122,7 @@ Deno.serve(async (request) => {
       const { data: invitation } = await admin.from("round_invitations").select("id").eq("workflow_id", id).eq("session_hash", sessionHash).eq("status", "opened").gt("expires_at", new Date().toISOString()).maybeSingle();
       if (!invitation) throw new Error("No se pudo acceder a esta ronda.");
     }
+    validateRelatedDocumentName(workflow.original_filename || `${workflow.title}.pdf`, document.name);
     const { data: parent } = await admin
       .from("document_versions")
       .select("sha256,byte_size,storage_path,page_count,page_dimensions")

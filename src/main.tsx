@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
+import { isRelatedDocumentName } from "./lib/document-name";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -381,52 +382,78 @@ function FrogQueueGame() {
   const [playing, setPlaying] = useState(false);
   const [score, setScore] = useState(0);
   useEffect(() => {
-    if (!playing) return;
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
     let frame = 0;
     let frogY = 0;
     let velocity = 0;
-    let obstacleX = canvas.width;
+    let obstacleX = playing ? canvas.width + 25 : 245;
     let raf = 0;
     const jump = () => { if (frogY === 0) velocity = 8.2; };
-    jumpRef.current = jump;
+    jumpRef.current = playing ? jump : () => undefined;
     const key = (event: KeyboardEvent) => {
       if (event.code === "Space" || event.code === "ArrowUp") { event.preventDefault(); jump(); }
     };
-    window.addEventListener("keydown", key);
-    const draw = () => {
-      frame += 1;
-      velocity -= .42;
-      frogY = Math.max(0, frogY + velocity);
-      if (frogY === 0) velocity = 0;
-      obstacleX -= 3.2;
-      if (obstacleX < -18) { obstacleX = canvas.width + 25 + Math.random() * 90; setScore((value) => value + 1); }
+    const drawDocument = (x: number) => {
+      context.fillStyle = "#ffffff";
+      context.strokeStyle = "#6f9b89";
+      context.lineWidth = 2;
+      context.beginPath(); context.roundRect(x, 58, 24, 30, 3); context.fill(); context.stroke();
+      context.fillStyle = "#c9dcd2";
+      context.fillRect(x + 5, 66, 14, 2); context.fillRect(x + 5, 72, 11, 2); context.fillRect(x + 5, 78, 14, 2);
+      context.fillStyle = "#d5b567";
+      context.beginPath(); context.moveTo(x + 17, 58); context.lineTo(x + 24, 65); context.lineTo(x + 17, 65); context.closePath(); context.fill();
+    };
+    const drawFrog = (lift: number) => {
+      const y = 72 - lift;
+      context.strokeStyle = "#0d4538"; context.lineWidth = 4; context.lineCap = "round";
+      context.beginPath(); context.moveTo(27, y + 8); context.lineTo(19, y + 14); context.moveTo(49, y + 8); context.lineTo(57, y + 14); context.stroke();
+      context.fillStyle = "#17614e";
+      context.beginPath(); context.ellipse(38, y + 4, 15, 12, 0, 0, Math.PI * 2); context.fill();
+      context.beginPath(); context.arc(31, y - 6, 6, 0, Math.PI * 2); context.arc(45, y - 6, 6, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#f4d477";
+      context.beginPath(); context.arc(31, y - 7, 2.2, 0, Math.PI * 2); context.arc(45, y - 7, 2.2, 0, Math.PI * 2); context.fill();
+      context.strokeStyle = "#f4d477"; context.lineWidth = 1.5;
+      context.beginPath(); context.arc(38, y + 4, 6, .15, Math.PI - .15); context.stroke();
+    };
+    const draw = (animate = true) => {
+      if (animate) {
+        frame += 1;
+        velocity -= .42;
+        frogY = Math.max(0, frogY + velocity);
+        if (frogY === 0) velocity = 0;
+        obstacleX -= 3.2 + Math.min(score * .08, 1.3);
+        if (obstacleX < -28) { obstacleX = canvas.width + 35 + Math.random() * 95; setScore((value) => value + 1); }
+      }
       context.clearRect(0, 0, canvas.width, canvas.height);
+      const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, "#edf7f1"); gradient.addColorStop(1, "#ffffff");
+      context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#d8b65e";
+      for (let index = 0; index < 7; index += 1) context.fillRect((index * 71 + frame * .35) % canvas.width, 18 + (index % 3) * 7, 2, 2);
       context.strokeStyle = "#cbdad3"; context.lineWidth = 2;
       context.beginPath(); context.moveTo(0, 87); context.lineTo(canvas.width, 87); context.stroke();
-      context.fillStyle = "#125746";
-      context.beginPath(); context.arc(38, 72 - frogY, 13, 0, Math.PI * 2); context.fill();
-      context.fillStyle = "#f3d37b";
-      context.beginPath(); context.arc(33, 68 - frogY, 2, 0, Math.PI * 2); context.arc(43, 68 - frogY, 2, 0, Math.PI * 2); context.fill();
-      context.fillStyle = "#a86f35"; context.fillRect(obstacleX, 65, 15, 22);
-      const collision = obstacleX < 51 && obstacleX + 15 > 25 && frogY < 20;
+      drawDocument(obstacleX);
+      if (!playing) { drawDocument(325); drawDocument(375); }
+      drawFrog(frogY);
+      const collision = obstacleX < 56 && obstacleX + 24 > 20 && frogY < 25;
       if (collision) { setPlaying(false); return; }
-      raf = window.requestAnimationFrame(draw);
+      if (animate) raf = window.requestAnimationFrame(() => draw(true));
     };
-    raf = window.requestAnimationFrame(draw);
+    draw(playing);
+    if (playing) window.addEventListener("keydown", key);
     return () => { window.cancelAnimationFrame(raf); window.removeEventListener("keydown", key); };
   }, [playing]);
-  return <details className="queue-game">
-    <summary>Jugar mientras espero <span>Opcional</span></summary>
+  return <section className="queue-game" aria-label="Juego opcional durante la espera">
+    <div className="queue-game-title"><span><FrogMark /></span><div><strong>Haz saltar la firma</strong><small>La cola continúa actualizándose mientras juegas.</small></div></div>
     <div className="queue-game-body">
-      <div className="queue-game-head"><strong>Salto de la rana</strong><span>Puntos: {score}</span></div>
-      <canvas ref={canvasRef} width={420} height={105} aria-label="Minijuego de salto de la rana" />
-      <p>Salta con la barra espaciadora, la flecha ↑ o el botón. La cola sigue actualizándose.</p>
+      <div className="queue-game-head"><strong>Rana vs. documentos</strong><span>{score ? `Documentos superados: ${score}` : "¿Cuántos podrás saltar?"}</span></div>
+      <canvas ref={canvasRef} width={420} height={105} aria-label="Minijuego de una rana saltando documentos PDF" />
+      <p>Usa espacio, la flecha ↑ o el botón para saltar cada PDF.</p>
       <div><button type="button" className="signout" onClick={() => { setScore(0); setPlaying(true); }}>{playing ? "Reiniciar" : score ? "Volver a jugar" : "Empezar"}</button><button type="button" className="primary" disabled={!playing} onClick={() => jumpRef.current()}>Saltar</button></div>
     </div>
-  </details>;
+  </section>;
 }
 
 function WaitingRoom({ position, lastChecked }: { position: number; lastChecked: Date | null }) {
@@ -454,6 +481,7 @@ function RoundAccess({ id }: { id: string }) {
   const [accessChecked, setAccessChecked] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [parentByteSize, setParentByteSize] = useState<number | null>(null);
+  const [expectedFilename, setExpectedFilename] = useState("");
   const [lastQueueCheck, setLastQueueCheck] = useState<Date | null>(null);
   const [round, setRound] = useState<{ title: string; message: string } | null>(
     null,
@@ -596,6 +624,7 @@ function RoundAccess({ id }: { id: string }) {
     } else {
       setDownloaded(true);
       setParentByteSize(Number(data.parentByteSize));
+      setExpectedFilename(String(data.expectedFilename || ""));
       window.open(data.url, "_blank", "noopener");
       setNotice("");
     }
@@ -828,7 +857,12 @@ function RoundAccess({ id }: { id: string }) {
                       disabled={!downloaded}
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null;
-                        if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
+                        if (file && expectedFilename && !isRelatedDocumentName(expectedFilename, file.name)) {
+                          setSignedDocument(null);
+                          setNoticeTarget("submission"); setNoticeTone("error");
+                          setNotice(`El archivo debe conservar un nombre parecido a “${expectedFilename}”. Puedes añadir “firmado” o “signed”, pero no sustituirlo por un nombre diferente.`);
+                          e.target.value = "";
+                        } else if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
                           setSignedDocument(null);
                           setNoticeTarget("submission"); setNoticeTone("error");
                           setNotice("Este archivo tiene un tamaño muy distinto al PDF descargado. Comprueba que seleccionaste el documento correcto.");
@@ -848,7 +882,7 @@ function RoundAccess({ id }: { id: string }) {
                       <small>
                         {signedDocument
                           ? `${Math.ceil(signedDocument.size / 1024)} KB`
-                          : "PDF · máximo 10 MB"}
+                          : expectedFilename ? `PDF · conserva un nombre parecido a ${expectedFilename}` : "PDF · máximo 10 MB"}
                       </small>
                     </span>
                   </label>
@@ -1197,6 +1231,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
   const [selected, setSelected] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const [finalConfirmed, setFinalConfirmed] = useState(false);
+  const [lastTrackingRefresh, setLastTrackingRefresh] = useState<Date | null>(null);
   async function loadRounds() {
     const s = await getSupabase();
     const { data, error } = await s
@@ -1207,17 +1242,21 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
     if (error) setNotice("No pudimos cargar tus rondas.");
     else setRounds((data ?? []) as OwnerRound[]);
   }
-  async function openRound(id: string) {
+  async function openRound(id: string, quiet = false) {
     const s = await getSupabase();
     const { data, error } = await s.functions.invoke("get-owner-round", {
       body: { id },
     });
-    if (error || !data)
-      setNotice("No pudimos cargar el seguimiento de la ronda.");
+    if (error || !data) {
+      if (!quiet) setNotice("No pudimos cargar el seguimiento del proceso.");
+    }
     else {
       setSelected(data);
-      setFinalConfirmed(false);
-      setNotice("");
+      setLastTrackingRefresh(new Date());
+      if (!quiet) {
+        setFinalConfirmed(false);
+        setNotice("");
+      }
     }
   }
   async function manageRound(
@@ -1361,6 +1400,12 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
     void loadRounds();
     void openRound(highlightRoundId);
   }, [highlightRoundId]);
+  useEffect(() => {
+    const workflowId = selected?.workflow?.id;
+    if (!focusOnly || !workflowId) return;
+    const timer = window.setInterval(() => { void openRound(workflowId, true); }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [focusOnly, selected?.workflow?.id]);
   return (
     <section className="owner-panel" id="mis-documentos">
       <div className="owner-panel-head">
@@ -1369,10 +1414,11 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
           <h2>{focusOnly ? "Seguimiento" : "Mis documentos"}</h2>
           <p>{focusOnly ? "Consulta el avance y las acciones que requieren tu atención." : "Consulta el estado de cada proceso y gestiona sus firmas."}</p>
         </div>
-        <button className="signout" onClick={loadRounds}>
+        <button className="signout" onClick={() => { void loadRounds(); if (selected?.workflow?.id) void openRound(selected.workflow.id); }}>
           <Icon name="refresh" size={16} /> Actualizar
         </button>
       </div>
+      {focusOnly && <p className="auto-refresh-note"><span className="live-dot" /> Actualización automática cada 20 segundos{lastTrackingRefresh ? ` · última ${lastTrackingRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}</p>}
       {!focusOnly && (rounds.length === 0 ? (
         <p className="empty-state">Todavía no has creado ningún proceso.</p>
       ) : (
@@ -1469,19 +1515,13 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
             <h4>{selected.workflow.status === "completed" ? "Descarga y conserva el documento final" : selected.activeTurn ? "Una persona está firmando ahora" : selected.queue.length ? "La cola avanza automáticamente" : "Comparte el enlace para recibir firmas"}</h4>
             <p>{selected.workflow.status === "completed" ? `La copia final estará disponible hasta ${selected.workflow.final_file_delete_at ? new Date(selected.workflow.final_file_delete_at).toLocaleString() : "cinco días después del cierre"}.` : selected.activeTurn ? "No necesitas hacer nada. Si el turno vence, quedará disponible para la siguiente persona." : selected.queue.length ? "Puedes revisar abajo quién espera y actuar solo si alguien informa una incidencia." : "Vuelve a Compartir para copiar el enlace o enviar invitaciones."}</p>
           </section>}
-          {focusOnly && selected.invitations?.length > 0 && <section className="invitation-statuses">
-            <div className="subsection-heading"><div><span className="section-kicker">Invitaciones</span><h4>Estado de los participantes</h4></div></div>
+          {focusOnly && selected.invitations?.length > 0 && <details className="tracking-section invitation-statuses" open={reservedInvitationCount > 0 && !selected.activeTurn && !selected.queue.length}>
+            <summary><span><span className="section-kicker">Invitaciones</span><strong>Estado de los participantes</strong></span><span>{selected.invitations.length}</span><Icon name="chevron" size={17} /></summary>
             {exceedsSignerCapacity && <p className="capacity-warning"><strong>Hay más invitaciones que plazas de firma.</strong> Este proceso se creó antes de aplicar el límite. Solo podrán completar la firma las primeras personas que cubran las {selected.workflow.expected_signature_count} plazas.</p>}
             <ul>{selected.invitations.map((invitation: any) => <li key={invitation.id}><span><strong>{invitation.holder_name}</strong><small>{invitation.email}</small></span><span className={`invite-state invite-${invitation.status}`}>{invitationStatus(invitation)}</span></li>)}</ul>
-          </section>}
-          <section className="signature-queue" aria-labelledby="queue-title">
-            <div className="subsection-heading">
-              <div>
-                <span className="section-kicker">Orden de acceso</span>
-                <h4 id="queue-title">Cola de firmas</h4>
-              </div>
-              <span>{selected.workflow.signature_count} completada{selected.workflow.signature_count === 1 ? "" : "s"}</span>
-            </div>
+          </details>}
+          <details className="tracking-section signature-queue" open={Boolean(selected.activeTurn || selected.queue.length)}>
+            <summary><span><span className="section-kicker">Orden de acceso</span><strong>Cola de firmas</strong></span><span>{selected.workflow.signature_count} completada{selected.workflow.signature_count === 1 ? "" : "s"}</span><Icon name="chevron" size={17} /></summary>
             <ol>
               {selected.activeTurn ? (
                 <li className="queue-current">
@@ -1503,7 +1543,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                 </li>
               ))}
             </ol>
-          </section>
+          </details>
           {!focusOnly && selected.workflow.status === "active" && <section className="share-round">
             <div className="subsection-heading">
               <div>
@@ -1521,14 +1561,9 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               onSent={() => { void openRound(selected.workflow.id); }}
             />
           </section>}
-          <section className="version-section" aria-labelledby="current-version-title">
-            <div className="subsection-heading">
-              <div>
-                <span className="section-kicker">Archivo vigente</span>
-                <h4 id="current-version-title">Versión actual</h4>
-              </div>
-              <button className="signout" onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar PDF actual</button>
-            </div>
+          <details className="tracking-section version-section" open={selected.workflow.status === "completed" || (selected.workflow.signature_count > 0 && !selected.activeTurn && !selected.queue.length && reservedInvitationCount === 0)}>
+            <summary><span><span className="section-kicker">Archivo vigente</span><strong>Versión actual</strong></span><span>Versión {currentVersion?.sequence ?? 0}</span><Icon name="chevron" size={17} /></summary>
+            <div className="section-action-row"><p>Revisa la copia vigente y consulta las versiones sustituidas.</p><button className="signout" onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar PDF actual</button></div>
             {currentVersion && <article className="current-version-card">
               <div className="version-summary">
                 <strong>
@@ -1592,7 +1627,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                 ))}
               </ul>
             </details>}
-          </section>
+          </details>
           {selected.reports.length > 0 && (
             <>
               <h4>Incidencias</h4>
@@ -2026,8 +2061,9 @@ function App() {
               placeholder="Ej. Presupuesto 2026"
               onChange={(e) => setTitle(e.target.value)}
             />
-            <small className="filename-preview">Se descargará como <strong>{`${title.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "documento"}.pdf`}</strong> · {title.length}/80</small>
+            <small className="filename-preview">Este nombre identifica el proceso · {title.length}/80</small>
           </label>
+          {document && <p className="filename-policy"><Icon name="shield" size={14} /> Las descargas conservarán un nombre basado en <strong>{document.name}</strong>. Las copias firmadas deberán mantener un nombre parecido.</p>}
           <label className={`upload ${document ? "has-file" : ""}`}>
             <input
               type="file"

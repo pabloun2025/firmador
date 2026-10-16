@@ -7,6 +7,7 @@ const submit = readFileSync("supabase/functions/submit-signed-version/index.ts",
 const download = readFileSync("supabase/functions/participant-download-version/index.ts", "utf8");
 const maintenance = readFileSync("supabase/functions/process-lifecycle-jobs/index.ts", "utf8");
 const capacity = readFileSync("supabase/migrations/20261016030000_enforce_signature_capacity.sql", "utf8");
+const names = readFileSync("supabase/functions/_shared/document-name.ts", "utf8");
 
 describe("coherent signing lifecycle", () => {
   it("uses 48-hour invitations and reminders at one and twenty-four hours", () => {
@@ -33,6 +34,12 @@ describe("coherent signing lifecycle", () => {
     expect(submit).toContain("comparePdfProfiles");
     expect(submit).toContain("validateRelatedSize");
     expect(submit).not.toContain("debe pesar más que la versión anterior");
+  });
+
+  it("rejects an unrelated upload filename on the server", () => {
+    expect(submit).toContain("validateRelatedDocumentName");
+    expect(names).toContain("El nombre del archivo no se parece al documento descargado");
+    expect(download).toContain("expectedFilename");
   });
 
   it("treats the signer count as a real invitation capacity", () => {
