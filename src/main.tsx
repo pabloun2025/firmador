@@ -1002,7 +1002,17 @@ const emptyInvite = (): InviteDraft => ({
   name: "",
   saveContact: false,
 });
-function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId: string; contacts?: Contact[]; onSent?: () => void }) {
+function activeInvitationEmails(invitations: any[] = []) {
+  const now = Date.now();
+  return new Set(invitations
+    .filter((invitation) => ["pending", "opened"].includes(invitation.status) && new Date(invitation.expires_at).getTime() > now)
+    .map((invitation) => invitation.email));
+}
+function remainingInvitationCapacity(workflow: any, invitations: any[] = []) {
+  if (workflow.expected_signature_count == null) return null;
+  return Math.max(0, workflow.expected_signature_count - workflow.signature_count - activeInvitationEmails(invitations).size);
+}
+function InvitationComposer({ workflowId, contacts = [], remainingInvitations = null, onSent }: { workflowId: string; contacts?: Contact[]; remainingInvitations?: number | null; onSent?: (remaining?: number | null) => void }) {
   const [drafts, setDrafts] = useState<InviteDraft[]>([emptyInvite()]);
   const [savedContacts, setSavedContacts] = useState<Contact[]>(contacts);
   const [chosen, setChosen] = useState<string[]>([]);
@@ -1014,6 +1024,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"error" | "success">("success");
   const [busy, setBusy] = useState(false);
+  const [slotsLeft, setSlotsLeft] = useState<number | null>(remainingInvitations);
   async function loadContacts() {
     const s = await getSupabase();
     const { data } = await s.from("owner_contacts").select("id,email,display_name").order("last_used_at", { ascending: false }).limit(100);
@@ -1025,6 +1036,9 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
   useEffect(() => {
     if (contacts.length) setSavedContacts(contacts);
   }, [contacts]);
+  useEffect(() => {
+    setSlotsLeft(remainingInvitations);
+  }, [remainingInvitations, workflowId]);
   function updateDraft(id: string, patch: Partial<InviteDraft>) {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
   }
@@ -1078,6 +1092,13 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
   }
   async function send(recipients: { email: string; name?: string; saveContact?: boolean }[], source: "drafts" | "contacts") {
     if (!recipients.length) return;
+    if (slotsLeft !== null && recipients.length > slotsLeft) {
+      setMessageTone("error");
+      setMessage(slotsLeft === 0
+        ? "Ya están cubiertas todas las plazas de firma de este proceso."
+        : `Solo quedan ${slotsLeft} ${slotsLeft === 1 ? "plaza disponible" : "plazas disponibles"}. Reduce la selección para continuar.`);
+      return;
+    }
     if (recipients.some((recipient) => !/^\S+@\S+\.\S+$/.test(recipient.email.trim()))) {
       setMessageTone("error");
       setMessage("Revisa los correos: hay una dirección incompleta o no válida.");
@@ -1093,6 +1114,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
         setMessage(await functionError(error, "No pudimos enviar las invitaciones. Revisa los correos e inténtalo de nuevo."));
         return;
       }
+      if (typeof data.remaining === "number" || data.remaining === null) setSlotsLeft(data.remaining);
       const parts = [];
       if (data.sent) parts.push(`${data.sent} invitación${data.sent === 1 ? " enviada" : "es enviadas"}`);
       if (data.skipped) parts.push(`${data.skipped} destinatario${data.skipped === 1 ? " ya estaba" : "s ya estaban"} en la cola`);
@@ -1104,7 +1126,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
         if (source === "drafts") setDrafts([emptyInvite()]);
         else setChosen([]);
         await loadContacts();
-        onSent?.();
+        onSent?.(data.remaining);
       }
     } finally {
       setBusy(false);
@@ -1125,6 +1147,9 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
     <div className="invitation-composer">
       <h4>Invitar por correo</h4>
       <p>Añade las personas que deben firmar. Cada una recibirá un enlace personal para entrar en la cola.</p>
+      {slotsLeft !== null && <p className={`invitation-capacity ${slotsLeft === 0 ? "is-full" : ""}`}>
+        {slotsLeft === 0 ? "Ya no quedan plazas de firma disponibles." : `Puedes invitar a ${slotsLeft} ${slotsLeft === 1 ? "persona más" : "personas más"}.`}
+      </p>}
       <div className="invite-list">
         {drafts.map((draft, index) => (
           <div className="invite-person" key={draft.id}>
@@ -1141,8 +1166,8 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
         ))}
       </div>
       <div className="invite-actions">
-        <button type="button" className="signout" disabled={busy || drafts.length >= 25} onClick={() => setDrafts((current) => [...current, emptyInvite()])}>+ Añadir otra persona</button>
-        <button type="button" className="primary" disabled={busy || !pending.length} onClick={() => send(pending, "drafts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : pending.length === 1 ? "Enviar 1 invitación" : `Enviar ${pending.length} invitaciones`}</button>
+        <button type="button" className="signout" disabled={busy || drafts.length >= 25 || slotsLeft === 0 || (slotsLeft !== null && drafts.length >= slotsLeft)} onClick={() => setDrafts((current) => [...current, emptyInvite()])}>+ Añadir otra persona</button>
+        <button type="button" className="primary" disabled={busy || !pending.length || slotsLeft === 0 || (slotsLeft !== null && pending.length > slotsLeft)} onClick={() => send(pending, "drafts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : pending.length === 1 ? "Enviar 1 invitación" : `Enviar ${pending.length} invitaciones`}</button>
       </div>
       {savedContacts.length > 0 && <details className="contact-picker" open>
         <summary><span>Elegir contactos frecuentes</span><small>{chosen.length ? `${chosen.length} seleccionado${chosen.length === 1 ? "" : "s"}` : `${savedContacts.length} guardado${savedContacts.length === 1 ? "" : "s"}`}</small><Icon name="chevron" size={17} /></summary>
@@ -1161,7 +1186,7 @@ function InvitationComposer({ workflowId, contacts = [], onSent }: { workflowId:
           </>}
         </div>)}</div>
         {contactPageCount > 1 && <div className="contact-pagination"><button type="button" className="text-button" disabled={contactPage === 0} onClick={() => setContactPage((page) => page - 1)}>Anterior</button><span>Página {contactPage + 1} de {contactPageCount}</span><button type="button" className="text-button" disabled={contactPage + 1 >= contactPageCount} onClick={() => setContactPage((page) => page + 1)}>Siguiente</button></div>}
-        <button type="button" className="primary selected-send" disabled={busy || !chosen.length} onClick={() => send(savedContacts.filter((contact) => chosen.includes(contact.id)).map((contact) => ({ email: contact.email, name: contact.display_name || "", saveContact: true })), "contacts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : `Enviar a ${chosen.length} marcado${chosen.length === 1 ? "" : "s"}`}</button>
+        <button type="button" className="primary selected-send" disabled={busy || !chosen.length || slotsLeft === 0 || (slotsLeft !== null && chosen.length > slotsLeft)} onClick={() => send(savedContacts.filter((contact) => chosen.includes(contact.id)).map((contact) => ({ email: contact.email, name: contact.display_name || "", saveContact: true })), "contacts")}><Icon name="mail" size={16} /> {busy ? "Enviando…" : `Enviar a ${chosen.length} marcado${chosen.length === 1 ? "" : "s"}`}</button>
       </details>}
       {message && <Notice message={message} tone={messageTone} />}
     </div>
@@ -1297,6 +1322,9 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
     ? "Firma completada" : invitation.status === "opened"
       ? (selected?.activeTurn?.holder_email === invitation.email ? "Firmando ahora" : selected?.queue?.some((item: any) => item.email === invitation.email) ? "En la cola" : "Enlace abierto")
       : invitation.status === "cancelled" ? "Caducada o cerrada" : invitation.email_error ? "Envío con incidencia" : "Invitación enviada";
+  const reservedInvitationCount = selected ? activeInvitationEmails(selected.invitations ?? []).size : 0;
+  const exceedsSignerCapacity = selected?.workflow.expected_signature_count != null
+    && selected.workflow.signature_count + reservedInvitationCount > selected.workflow.expected_signature_count;
   const renderRoundList = (items: OwnerRound[]) => (
     <div className="owner-list">
       {items.map((round) => (
@@ -1443,6 +1471,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
           </section>}
           {focusOnly && selected.invitations?.length > 0 && <section className="invitation-statuses">
             <div className="subsection-heading"><div><span className="section-kicker">Invitaciones</span><h4>Estado de los participantes</h4></div></div>
+            {exceedsSignerCapacity && <p className="capacity-warning"><strong>Hay más invitaciones que plazas de firma.</strong> Este proceso se creó antes de aplicar el límite. Solo podrán completar la firma las primeras personas que cubran las {selected.workflow.expected_signature_count} plazas.</p>}
             <ul>{selected.invitations.map((invitation: any) => <li key={invitation.id}><span><strong>{invitation.holder_name}</strong><small>{invitation.email}</small></span><span className={`invite-state invite-${invitation.status}`}>{invitationStatus(invitation)}</span></li>)}</ul>
           </section>}
           <section className="signature-queue" aria-labelledby="queue-title">
@@ -1485,7 +1514,12 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
             </div>
             <div className="share-url"><input readOnly value={`${window.location.origin}${roundPath(selected.workflow.id)}`} aria-label="Enlace para solicitar un turno de firma" /><button className="signout" onClick={() => navigator.clipboard.writeText(`${window.location.origin}${roundPath(selected.workflow.id)}`).then(() => setNotice("Enlace copiado.")).catch(() => setNotice("No se pudo copiar el enlace."))}>Copiar enlace</button></div>
             <p className="share-help">El enlace estará disponible mientras el proceso siga en curso.</p>
-            <InvitationComposer workflowId={selected.workflow.id} contacts={selected.contacts ?? []} onSent={() => { void openRound(selected.workflow.id); }} />
+            <InvitationComposer
+              workflowId={selected.workflow.id}
+              contacts={selected.contacts ?? []}
+              remainingInvitations={remainingInvitationCapacity(selected.workflow, selected.invitations ?? [])}
+              onSent={() => { void openRound(selected.workflow.id); }}
+            />
           </section>}
           <section className="version-section" aria-labelledby="current-version-title">
             <div className="subsection-heading">
@@ -1610,6 +1644,7 @@ function App() {
   const [createdLink, setCreatedLink] = useState("");
   const [createdRoundId, setCreatedRoundId] = useState("");
   const [createdRoundTitle, setCreatedRoundTitle] = useState("");
+  const [createdInviteCapacity, setCreatedInviteCapacity] = useState<number | null>(2);
   const [creationStage, setCreationStage] = useState<"create" | "share" | "track">("create");
   const [busy, setBusy] = useState(false);
   const [authNoticeTone, setAuthNoticeTone] = useState<"info" | "error" | "success">("info");
@@ -1648,7 +1683,8 @@ function App() {
       });
     }, 80);
   }
-  function finishInvitationStep() {
+  function finishInvitationStep(remaining?: number | null) {
+    if (typeof remaining === "number" || remaining === null) setCreatedInviteCapacity(remaining);
     setNotice("Invitaciones enviadas. Abriendo el seguimiento del proceso…");
     window.setTimeout(showCreatedProcess, 650);
   }
@@ -1663,6 +1699,7 @@ function App() {
     setCreatedLink("");
     setCreatedRoundId("");
     setCreatedRoundTitle("");
+    setCreatedInviteCapacity(2);
     setNotice("");
     setCreationStage("create");
     window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 30);
@@ -1815,6 +1852,7 @@ function App() {
       setNotice("");
       setCreatedRoundId(data.id);
       setCreatedRoundTitle(title.trim());
+      setCreatedInviteCapacity(indefiniteSigners ? null : expected);
       setCreatedLink(`${window.location.origin}${roundPath(data.id)}`);
       setCreationStage("share");
     }
@@ -2105,7 +2143,7 @@ function App() {
                 Copiar enlace
               </button>
             </div>
-            {createdRoundId && <InvitationComposer workflowId={createdRoundId} onSent={finishInvitationStep} />}
+            {createdRoundId && <InvitationComposer workflowId={createdRoundId} remainingInvitations={createdInviteCapacity} onSent={finishInvitationStep} />}
             <div className="created-next-step">
               <div>
                 <span className="section-kicker">Siguiente paso</span>

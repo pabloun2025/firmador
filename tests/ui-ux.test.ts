@@ -48,6 +48,17 @@ describe("LeapSign task-oriented interface", () => {
     expect(app).toContain('form.set("expectedSignatures"');
   });
 
+  it("shows and enforces the remaining invitation capacity", () => {
+    expect(app).toContain("Puedes invitar a");
+    expect(app).toContain("remainingInvitations");
+    expect(redesign).toContain(".invitation-capacity");
+  });
+
+  it("keeps the tracking handoff aligned across the full card", () => {
+    expect(redesign).toMatch(/\.tracking-handoff\s*\{[^}]*grid-column:\s*1 \/ -1;/s);
+    expect(redesign).toMatch(/\.tracking-handoff\s*\{[^}]*padding:\s*0 30px 26px;/s);
+  });
+
   it("defines visible focus and responsive mobile layouts", () => {
     expect(redesign).toContain(":focus-visible");
     expect(redesign).toContain("@media (max-width: 600px)");

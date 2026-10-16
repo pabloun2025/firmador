@@ -1701,7 +1701,18 @@ label {
 
 .tracking-handoff {
   display: grid;
+  grid-column: 1 / -1;
   gap: 18px;
+  min-width: 0;
+  padding: 0 30px 26px;
+}
+
+.tracking-handoff .creation-progress {
+  margin: 0 -30px 22px;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 20px 20px 0 0;
 }
 
 .tracking-handoff h2 {
@@ -1725,6 +1736,32 @@ label {
   border-top: 1px solid #e0e8e3;
 }
 
+.invitation-capacity {
+  margin: 10px 0 14px !important;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #edf6f1;
+  color: #245f4d !important;
+  font-size: 11px !important;
+  font-weight: 700;
+}
+
+.invitation-capacity.is-full {
+  background: #fff3ef;
+  color: #9c3d32 !important;
+}
+
+.capacity-warning {
+  margin: 0 0 12px;
+  padding: 11px 13px;
+  border: 1px solid #efc1b9;
+  border-radius: 9px;
+  background: #fff6f3;
+  color: #873c32;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 @media (max-width: 700px) {
   .created-next-step {
     display: grid;
@@ -1744,6 +1781,16 @@ label {
 
   .tracking-handoff-actions {
     display: grid;
+  }
+
+  .tracking-handoff {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .tracking-handoff .creation-progress {
+    margin-right: -18px;
+    margin-left: -18px;
   }
 
   .tracking-navigation,

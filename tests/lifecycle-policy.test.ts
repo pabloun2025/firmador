@@ -6,6 +6,7 @@ const invitations = readFileSync("supabase/functions/send-round-invitations/inde
 const submit = readFileSync("supabase/functions/submit-signed-version/index.ts", "utf8");
 const download = readFileSync("supabase/functions/participant-download-version/index.ts", "utf8");
 const maintenance = readFileSync("supabase/functions/process-lifecycle-jobs/index.ts", "utf8");
+const capacity = readFileSync("supabase/migrations/20261016030000_enforce_signature_capacity.sql", "utf8");
 
 describe("coherent signing lifecycle", () => {
   it("uses 48-hour invitations and reminders at one and twenty-four hours", () => {
@@ -32,5 +33,13 @@ describe("coherent signing lifecycle", () => {
     expect(submit).toContain("comparePdfProfiles");
     expect(submit).toContain("validateRelatedSize");
     expect(submit).not.toContain("debe pesar más que la versión anterior");
+  });
+
+  it("treats the signer count as a real invitation capacity", () => {
+    expect(invitations).toContain("expected_signature_count - workflow.signature_count - activeEmails.size");
+    expect(invitations).toContain("Ya están cubiertas todas las plazas de firma");
+    expect(invitations).toContain("remaining");
+    expect(capacity).toContain("signature_count >= workflow_row.expected_signature_count");
+    expect(capacity).toContain("Este proceso ya alcanzó el número de firmas previsto");
   });
 });

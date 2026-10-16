@@ -35,8 +35,21 @@ Deno.serve(async request => {
     ]);
     if (settings?.maintenance_mode) throw new Error('LeapSign está en mantenimiento. Inténtalo más tarde.');
     if (!settings?.email_master_enabled || !settings.email_invitations_enabled || !template?.enabled) throw new Error('Las invitaciones por correo están desactivadas temporalmente.');
-    const { data: workflow } = await admin.from('workflows').select('id,title,status').eq('id', id).eq('owner_id', user.id).maybeSingle();
+    const { data: workflow } = await admin.from('workflows').select('id,title,status,signature_count,expected_signature_count').eq('id', id).eq('owner_id', user.id).maybeSingle();
     if (!workflow || workflow.status !== 'active') throw new Error('Este proceso ya no admite nuevas firmas.');
+    const now = new Date();
+    const { data: existingInvitations } = await admin.from('round_invitations').select('email,status,expires_at').eq('workflow_id', id);
+    const completedEmails = new Set((existingInvitations ?? []).filter(item => item.status === 'completed').map(item => item.email));
+    const activeEmails = new Set((existingInvitations ?? []).filter(item => ['pending','opened'].includes(item.status) && new Date(item.expires_at) > now).map(item => item.email));
+    if (workflow.expected_signature_count != null) {
+      const available = Math.max(0, workflow.expected_signature_count - workflow.signature_count - activeEmails.size);
+      const newRecipients = unique.filter(item => !completedEmails.has(item.email) && !activeEmails.has(item.email));
+      if (newRecipients.length > available) {
+        throw new Error(available === 0
+          ? 'Ya están cubiertas todas las plazas de firma de este proceso.'
+          : `Solo quedan ${available} ${available === 1 ? 'plaza disponible' : 'plazas disponibles'} para firmar.`);
+      }
+    }
     const resendKey = Deno.env.get('RESEND_API_KEY'); const from = Deno.env.get('RESEND_FROM_EMAIL');
     if (!resendKey || !from) throw new Error('El envío de correo no está configurado.');
     let sent = 0; let skipped = 0; let completed = 0; const failed: string[] = [];
@@ -62,8 +75,14 @@ Deno.serve(async request => {
       const html = `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Invitación a firmar</p><h1 style="margin:10px 0 16px;font-size:28px">Tienes un documento pendiente</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Abrir invitación</a></p><p style="overflow-wrap:anywhere;font-size:12px;color:#53665e">Si el botón está bloqueado, copia este enlace:<br><a href="${link}" style="color:#124d40">${link}</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Enlace personal válido durante 48 horas. Solo se consume cuando incorporas correctamente el PDF firmado.</p></main></div>`;
       const response = await fetch('https://api.resend.com/emails', { method:'POST', headers:{ Authorization:`Bearer ${resendKey}`, 'Content-Type':'application/json', 'Idempotency-Key':`leapsign-invitation-${invitation.data.id}` }, body:JSON.stringify({ from, to:[recipient.email], subject, html }) });
       if (response.ok) { sent++; await admin.from('round_invitations').update({ email_sent_at:new Date().toISOString(), email_error:null }).eq('id', invitation.data.id); }
-      else { failed.push(recipient.email); await admin.from('round_invitations').update({ email_error:`HTTP ${response.status}` }).eq('id', invitation.data.id); }
+      else { failed.push(recipient.email); await admin.from('round_invitations').update({ status:'cancelled', email_error:`HTTP ${response.status}` }).eq('id', invitation.data.id); }
     }
-    return Response.json({ sent, skipped, completed, failed }, { headers: cors });
+    let remaining: number | null = null;
+    if (workflow.expected_signature_count != null) {
+      const { data: currentInvitations } = await admin.from('round_invitations').select('email,status,expires_at').eq('workflow_id', id);
+      const reserved = new Set((currentInvitations ?? []).filter(item => ['pending','opened'].includes(item.status) && new Date(item.expires_at) > new Date()).map(item => item.email)).size;
+      remaining = Math.max(0, workflow.expected_signature_count - workflow.signature_count - reserved);
+    }
+    return Response.json({ sent, skipped, completed, failed, remaining }, { headers: cors });
   } catch (error) { return Response.json({ error:error instanceof Error ? error.message : 'Error inesperado.' }, { status:400, headers:cors }); }
 });
