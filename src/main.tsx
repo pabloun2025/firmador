@@ -1192,8 +1192,8 @@ function InvitationComposer({ workflowId, contacts = [], remainingInvitations = 
               {drafts.length > 1 && <button type="button" className="text-button danger" onClick={() => setDrafts((current) => current.filter((item) => item.id !== draft.id))}>Quitar</button>}
             </div>
             <div className="invite-fields">
-              <label>Correo<input type="email" value={draft.email} onChange={(event) => updateDraft(draft.id, { email: event.target.value })} placeholder="persona@ejemplo.com" /></label>
-              <label>Nombre <em>Opcional</em><input value={draft.name} maxLength={120} onChange={(event) => updateDraft(draft.id, { name: event.target.value })} placeholder="Nombre para la invitación" /></label>
+              <label><span className="field-label">Correo</span><input type="email" value={draft.email} onChange={(event) => updateDraft(draft.id, { email: event.target.value })} placeholder="persona@ejemplo.com" /></label>
+              <label><span className="field-label">Nombre <em>Opcional</em></span><input value={draft.name} maxLength={120} onChange={(event) => updateDraft(draft.id, { name: event.target.value })} placeholder="Nombre para la invitación" /></label>
             </div>
             <label className="save-contact"><input type="checkbox" checked={draft.saveContact} onChange={(event) => updateDraft(draft.id, { saveContact: event.target.checked })} /> Guardar en contactos frecuentes</label>
           </div>

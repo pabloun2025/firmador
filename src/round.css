@@ -99,6 +99,7 @@
 .invite-person-head .text-button { margin: 0; padding: 0; font-size: 12px; }
 .invite-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .invite-fields label { margin: 10px 0 0; font-size: 13px; }
+.invite-fields .field-label { display: flex; align-items: baseline; gap: 7px; min-height: 17px; }
 .invite-fields input { margin-top: 1px; }
 .save-contact { display: flex; align-items: center; gap: 8px; margin: 11px 0 0 !important; color: #526a61; font-size: 12px !important; font-weight: 550 !important; }
 .save-contact input { width: 17px; height: 17px; margin: 0; }
