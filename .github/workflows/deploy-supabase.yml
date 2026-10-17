@@ -1,11 +1,6 @@
 name: Deploy Supabase
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'supabase/**'
-      - '.github/workflows/deploy-supabase.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,10 +19,10 @@ jobs:
       SUPABASE_PROJECT_REF: lgsdoutarthfymbjgdrj
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # reviewed v1
         with:
           # Pin the CLI so setup does not query GitHub's latest-release API,
           # which can fail when the shared Actions IP reaches its rate limit.

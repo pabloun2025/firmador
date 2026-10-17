@@ -1,4 +1,6 @@
 project_id = "lgsdoutarthfymbjgdrj"
 
 [functions.process-lifecycle-jobs]
+# pg_cron uses a dedicated random credential checked by authorize_lifecycle_job.
+# The handler also accepts the internal service-role credential; never anon JWTs.
 verify_jwt = false

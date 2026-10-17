@@ -1,3 +1,4 @@
+import { protectEndpoint } from "../_shared/economic-guard.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
@@ -11,7 +12,7 @@ async function ownerClient(request: Request) {
   return user;
 }
 
-Deno.serve(async request => {
+Deno.serve(protectEndpoint("get-owner-round", createClient, async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const { id } = await request.json();
@@ -34,4 +35,4 @@ Deno.serve(async request => {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: 400, headers: cors });
   }
-});
+}));

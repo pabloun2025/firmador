@@ -1,3 +1,4 @@
+import { protectEndpoint, budgetedFetch } from "../_shared/economic-guard.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({
@@ -16,7 +17,7 @@ function emailHtml(kind: "reminder_1h" | "reminder_24h", body: string, link: str
   return `<div style="margin:0;background:#f5f6f2;padding:32px 16px"><main style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce5df;border-radius:16px;padding:32px;font-family:Arial,sans-serif;color:#102c25"><p style="margin:0 0 24px;font-size:20px;font-weight:700">LeapSign</p><p style="margin:0;color:#29705c;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">${label}</p><h1 style="margin:10px 0 16px;font-size:28px">${heading}</h1>${paragraphs(body)}<p style="margin:24px 0"><a href="${link}" style="display:inline-block;background:#124d40;color:#fff;padding:13px 18px;border-radius:9px;text-decoration:none;font-weight:700">Abrir invitación</a></p><p style="overflow-wrap:anywhere;font-size:12px;color:#53665e">Si el botón no funciona, copia este enlace:<br><a href="${link}" style="color:#124d40">${link}</a></p><hr style="border:0;border-top:1px solid #e6ece8;margin:28px 0 18px"><p style="margin:0;color:#75827c;font-size:12px;line-height:1.5">Enlace personal y de un solo uso. Se consume únicamente al incorporar correctamente el PDF firmado.</p></main></div>`;
 }
 
-Deno.serve(async (request) => {
+Deno.serve(protectEndpoint("process-lifecycle-jobs", createClient, async (request) => {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const now = new Date();
@@ -54,7 +55,7 @@ Deno.serve(async (request) => {
           });
           const link = `https://firma.veryfacil.org/r/${invitation.workflow_id}?invite=${encodeURIComponent(rawToken)}`;
           const values = { name: invitation.holder_name, title: workflow.title, link };
-          const response = await fetch("https://api.resend.com/emails", {
+          const response = await budgetedFetch(admin, "https://api.resend.com/emails", {
             method: "POST",
             headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json", "Idempotency-Key": `leapsign-${kind}-${invitation.id}` },
             body: JSON.stringify({ from, to: [invitation.email], subject: render(template.subject_template, values), html: emailHtml(kind, render(template.body_template, values), link) }),
@@ -86,4 +87,4 @@ Deno.serve(async (request) => {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Error de mantenimiento" }, { status: 500 });
   }
-});
+}));

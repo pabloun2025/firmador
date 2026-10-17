@@ -1,4 +1,5 @@
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { protectEndpoint, budgetedFetch, reserveUpload } from "../_shared/economic-guard.ts";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { comparePdfProfiles, inspectPdf, validateRelatedSize } from "../_shared/pdf-validation.ts";
 import { validateRelatedDocumentName } from "../_shared/document-name.ts";
 
@@ -24,7 +25,7 @@ const render = (template: string, variables: Record<string,string>) => Object.en
 const paragraphs = (value: string) => value.split(/\n{2,}/).map(part => `<p style="line-height:1.65;color:#53665e">${escapeHtml(part).replaceAll('\n','<br>')}</p>`).join('');
 
 async function notifyOwnerWhenComplete(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   workflowId: string,
 ) {
   const { data: workflow } = await admin
@@ -60,7 +61,7 @@ async function notifyOwnerWhenComplete(
   const subject = render(template.subject_template, variables);
   const body = render(template.body_template, variables);
   try {
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await budgetedFetch(admin, "https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -75,7 +76,7 @@ async function notifyOwnerWhenComplete(
   await admin.from("workflows").update({ owner_completion_notified_at: null }).eq("id", workflowId).eq("owner_completion_notified_at", notifiedAt);
 }
 
-Deno.serve(async (request) => {
+Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request) => {
   if (request.method === "OPTIONS")
     return new Response("ok", { headers: cors });
   try {
@@ -100,7 +101,6 @@ Deno.serve(async (request) => {
     if (!document.size || document.size > 10 * 1024 * 1024)
       throw new Error("El PDF debe pesar como máximo 10 MB.");
     const bytes = new Uint8Array(await document.arrayBuffer());
-    const candidateProfile = await inspectPdf(bytes);
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -109,7 +109,7 @@ Deno.serve(async (request) => {
     const sessionHash = await hashText(sessionId);
     const { data: workflow } = await admin
       .from("workflows")
-      .select("id,status,group_key_hash,current_version_id,title,original_filename")
+      .select("id,owner_id,status,group_key_hash,current_version_id,title,original_filename")
       .eq("id", id)
       .maybeSingle();
     if (
@@ -122,26 +122,6 @@ Deno.serve(async (request) => {
       const { data: invitation } = await admin.from("round_invitations").select("id").eq("workflow_id", id).eq("session_hash", sessionHash).eq("status", "opened").gt("expires_at", new Date().toISOString()).maybeSingle();
       if (!invitation) throw new Error("No se pudo acceder a esta ronda.");
     }
-    validateRelatedDocumentName(workflow.original_filename || `${workflow.title}.pdf`, document.name);
-    const { data: parent } = await admin
-      .from("document_versions")
-      .select("sha256,byte_size,storage_path,page_count,page_dimensions")
-      .eq("id", workflow.current_version_id)
-      .maybeSingle();
-    if (!parent)
-      throw new Error("No encontramos la versión actual del documento.");
-    const digest = await hash(bytes);
-    if (digest === parent.sha256)
-      throw new Error(
-        "El archivo es igual a la versión anterior. Descarga el PDF, fírmalo y vuelve a cargar la copia resultante.",
-      );
-    validateRelatedSize(Number(parent.byte_size), document.size);
-    const { data: parentBlob, error: parentDownloadError } = await admin.storage.from("firmador-documents").download(parent.storage_path);
-    if (parentDownloadError || !parentBlob) throw new Error("No pudimos comprobar el documento vigente.");
-    const parentProfile = parent.page_count && Array.isArray(parent.page_dimensions) && parent.page_dimensions.length
-      ? { pageCount: Number(parent.page_count), pageDimensions: parent.page_dimensions }
-      : await inspectPdf(new Uint8Array(await parentBlob.arrayBuffer()));
-    comparePdfProfiles(parentProfile, candidateProfile);
     const { data: lock } = await admin
       .from("open_round_locks")
       .select("version_id_at_claim,expires_at,reviewed_version_at")
@@ -156,6 +136,30 @@ Deno.serve(async (request) => {
       throw new Error(
         "Hay una versión más reciente del documento. Vuelve a abrir tu turno.",
       );
+    validateRelatedDocumentName(workflow.original_filename || `${workflow.title}.pdf`, document.name);
+    const { data: parent } = await admin
+      .from("document_versions")
+      .select("sha256,byte_size,storage_path,page_count,page_dimensions")
+      .eq("id", workflow.current_version_id)
+      .maybeSingle();
+    if (!parent)
+      throw new Error("No encontramos la versión actual del documento.");
+    const digest = await hash(bytes);
+    if (digest === parent.sha256)
+      throw new Error(
+        "El archivo es igual a la versión anterior. Descarga el PDF, fírmalo y vuelve a cargar la copia resultante.",
+      );
+    validateRelatedSize(Number(parent.byte_size), document.size);
+    let parentProfile;
+    if (parent.page_count && Array.isArray(parent.page_dimensions) && parent.page_dimensions.length) {
+      parentProfile = { pageCount: Number(parent.page_count), pageDimensions: parent.page_dimensions };
+    } else {
+      const { data: parentBlob, error: parentDownloadError } = await admin.storage.from("firmador-documents").download(parent.storage_path);
+      if (parentDownloadError || !parentBlob) throw new Error("No pudimos comprobar el documento vigente.");
+      parentProfile = await inspectPdf(new Uint8Array(await parentBlob.arrayBuffer()));
+    }
+    const candidateProfile = await inspectPdf(bytes);
+    comparePdfProfiles(parentProfile, candidateProfile);
     let submissionId: string;
     const { data: existing } = await admin
       .from("signature_submissions")
@@ -169,6 +173,7 @@ Deno.serve(async (request) => {
     else {
       submissionId = crypto.randomUUID();
       const path = `${id}/submissions/${submissionId}.pdf`;
+      await reserveUpload(admin, document.size, workflow.owner_id);
       const { error: uploadError } = await admin.storage
         .from("firmador-documents")
         .upload(path, bytes, { contentType: "application/pdf", upsert: false });
@@ -212,4 +217,4 @@ Deno.serve(async (request) => {
       { status: 400, headers: cors },
     );
   }
-});
+}));

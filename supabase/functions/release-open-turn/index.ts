@@ -1,3 +1,4 @@
+import { protectEndpoint } from "../_shared/economic-guard.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -20,7 +21,7 @@ const escapeHtml = (value: string) =>
         char
       ]!,
   );
-Deno.serve(async (req) => {
+Deno.serve(protectEndpoint("release-open-turn", createClient, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     const { id, sessionId } = await req.json();
@@ -43,4 +44,4 @@ Deno.serve(async (req) => {
       { status: 400, headers: cors },
     );
   }
-});
+}));

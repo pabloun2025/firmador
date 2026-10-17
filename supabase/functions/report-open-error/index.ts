@@ -1,3 +1,4 @@
+import { protectEndpoint, budgetedFetch } from "../_shared/economic-guard.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
@@ -6,7 +7,7 @@ const reasons = new Set(['La firma está en un lugar incorrecto', 'El archivo no
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]!));
 const appUrl = 'https://firma.veryfacil.org';
 
-Deno.serve(async request => {
+Deno.serve(protectEndpoint("report-open-error", createClient, async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const { id, groupKey = '', sessionId, reason, detail = '', reporterName = '', reporterEmail = '', inviteToken = '' } = await request.json();
@@ -30,7 +31,7 @@ Deno.serve(async request => {
       const { data: owner } = await admin.auth.admin.getUserById(workflow.owner_id);
       if (owner.user?.email) {
         const info = [reporter.name && `Nombre: ${escapeHtml(reporter.name)}`, reporter.email && `Correo: ${escapeHtml(reporter.email)}`, `Motivo: ${escapeHtml(reason)}`, detail.trim() && `Observación: ${escapeHtml(detail.trim())}`].filter(Boolean).map(line => `<li>${line}</li>`).join('');
-        const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to: [owner.user.email], subject: `Acción requerida: incidencia en ${workflow.title}`, html: `<main style="font-family:Arial,sans-serif;color:#183e35"><h1>LeapSign</h1><p>El proceso <strong>${escapeHtml(workflow.title)}</strong> se detuvo para evitar que continúe con un documento posiblemente incorrecto.</p><ul>${info}</ul><p><a href="${appUrl}" style="display:inline-block;background:#1d5749;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">Abrir seguimiento del proceso</a></p></main>` }) });
+        const response = await budgetedFetch(admin, 'https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to: [owner.user.email], subject: `Acción requerida: incidencia en ${workflow.title}`, html: `<main style="font-family:Arial,sans-serif;color:#183e35"><h1>LeapSign</h1><p>El proceso <strong>${escapeHtml(workflow.title)}</strong> se detuvo para evitar que continúe con un documento posiblemente incorrecto.</p><ul>${info}</ul><p><a href="${appUrl}" style="display:inline-block;background:#1d5749;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">Abrir seguimiento del proceso</a></p></main>` }) });
         if (!response.ok) console.error('No se pudo enviar el aviso de incidencia', response.status);
       }
     }
@@ -38,4 +39,4 @@ Deno.serve(async request => {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: 400, headers: cors });
   }
-});
+}));

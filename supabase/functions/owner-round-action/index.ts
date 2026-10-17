@@ -1,3 +1,4 @@
+import { protectEndpoint } from "../_shared/economic-guard.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors = {
@@ -62,7 +63,7 @@ async function flushCleanupJobs(admin: any, workflowId: string) {
   return { removed, pending: failed > 0 };
 }
 
-Deno.serve(async (request) => {
+Deno.serve(protectEndpoint("owner-round-action", createClient, async (request) => {
   if (request.method === "OPTIONS")
     return new Response("ok", { headers: cors });
   try {
@@ -160,4 +161,4 @@ Deno.serve(async (request) => {
       { status: 400, headers: cors },
     );
   }
-});
+}));

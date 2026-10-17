@@ -1,3 +1,4 @@
+import { protectEndpoint } from "../_shared/economic-guard.ts";
 import { createClient, type SupabaseClient, type User } from "jsr:@supabase/supabase-js@2";
 
 const allowedOrigins = new Set([
@@ -123,7 +124,7 @@ async function dashboard(context: AdminContext) {
   ]);
   if (metricsError) throw metricsError;
   return {
-    metrics: { ...metrics, accounts_total: users.data?.total ?? 0 },
+    metrics: { ...metrics, accounts_total: (users.data && 'total' in users.data ? users.data.total : 0) },
     settings: settings.data,
     templates: templates.data ?? [],
     audit: logs.data ?? [],
@@ -301,7 +302,7 @@ async function runCleanup(context: AdminContext, payload: Record<string, unknown
   return { ok: true, removed, failed };
 }
 
-Deno.serve(async (request) => {
+Deno.serve(protectEndpoint("superadmin-console", createClient, async (request) => {
   const headers = cors(request);
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   try {
@@ -326,4 +327,4 @@ Deno.serve(async (request) => {
     console.error("superadmin-console", code, error instanceof Error ? error.message : error);
     return Response.json({ error: message, code }, { status, headers });
   }
-});
+}));

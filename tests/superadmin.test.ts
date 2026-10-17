@@ -41,7 +41,10 @@ describe("superadmin recovery contract", () => {
   it("requires a password-authenticated admin and limits attempts", () => {
     expect(recoveryEdge).toContain('methods.includes("password")');
     expect(recoveryEdge).toContain('.from("super_admins")');
-    expect(recoveryEdge).toContain("recovery.attempts >= 5");
+    expect(recoveryEdge).toContain('admin.rpc("consume_superadmin_recovery"');
+    const atomicRecovery = readFileSync("supabase/migrations/20261017020000_atomic_admin_recovery.sql", "utf8");
+    expect(atomicRecovery).toContain("recovery.attempts >= 5");
+    expect(atomicRecovery).toContain("for update");
     expect(recoveryEdge).toContain("admin.auth.admin.mfa.deleteFactor");
   });
 });

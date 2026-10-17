@@ -1,3 +1,4 @@
+import { protectEndpoint, budgetedFetch } from "../_shared/economic-guard.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const allowedOrigins = new Set([
@@ -25,7 +26,7 @@ const decodeJwt = (authorization: string) => {
   } catch { return {}; }
 };
 
-Deno.serve(async (request) => {
+Deno.serve(protectEndpoint("superadmin-recovery", createClient, async (request) => {
   const headers = cors(request);
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   try {
@@ -56,7 +57,7 @@ Deno.serve(async (request) => {
       const key = Deno.env.get("RESEND_API_KEY");
       const from = Deno.env.get("RESEND_FROM_EMAIL");
       if (!key || !from) throw new Error("El correo de recuperación no está disponible.");
-      const response = await fetch("https://api.resend.com/emails", {
+      const response = await budgetedFetch(admin, "https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -73,14 +74,10 @@ Deno.serve(async (request) => {
     if (payload.action === "confirm") {
       const code = String(payload.code || "").replace(/\D/g, "");
       if (!/^\d{8}$/.test(code)) throw new Error("Escribe el código de ocho dígitos.");
-      const { data: recovery } = await admin.from("superadmin_recovery_codes").select("id,code_hash,attempts,expires_at").eq("user_id", user.id).is("used_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (!recovery || new Date(recovery.expires_at).getTime() <= Date.now() || recovery.attempts >= 5) throw new Error("El código ha caducado. Solicita uno nuevo.");
-      const valid = recovery.code_hash === await digest(`${user.id}:${code}`);
-      if (!valid) {
-        await admin.from("superadmin_recovery_codes").update({ attempts: recovery.attempts + 1 }).eq("id", recovery.id);
-        throw new Error("El código no es correcto.");
-      }
-      await admin.from("superadmin_recovery_codes").update({ used_at: new Date().toISOString() }).eq("id", recovery.id).is("used_at", null);
+      const { data: consumed, error: consumeError } = await admin.rpc("consume_superadmin_recovery", {
+        p_user_id: user.id, p_code_hash: await digest(`${user.id}:${code}`),
+      });
+      if (consumeError || consumed !== true) throw new Error("El código no es correcto o ha caducado. Solicita uno nuevo si agotaste los intentos.");
       const factors = await admin.auth.admin.mfa.listFactors({ userId: user.id });
       if (factors.error) throw new Error("No pudimos consultar el segundo factor.");
       for (const factor of factors.data?.factors ?? []) {
@@ -94,4 +91,4 @@ Deno.serve(async (request) => {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "No pudimos completar la recuperación." }, { status: 400, headers });
   }
-});
+}));

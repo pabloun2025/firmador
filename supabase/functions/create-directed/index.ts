@@ -1,3 +1,4 @@
+import { protectEndpoint, reserveUpload } from "../_shared/economic-guard.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { safeDocumentName } from '../_shared/document-name.ts';
 
@@ -6,12 +7,12 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 const encoder = new TextEncoder();
-const digest = async (bytes: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+const digest = async (bytes: Uint8Array<ArrayBuffer>) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
 const allowedDeadlines = new Set([30, 60, 120, 300, 720, 1440, 2880]);
 
 type ParticipantInput = { name: string; email: string; deadlineMinutes: number };
 
-Deno.serve(async request => {
+Deno.serve(protectEndpoint("create-directed", createClient, async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const authorization = request.headers.get('Authorization');
@@ -39,6 +40,7 @@ Deno.serve(async request => {
     if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw new Error('El archivo no es un PDF legible.');
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    await reserveUpload(admin, document.size, user.id);
     const { data: workflow, error: workflowError } = await admin.from('workflows').insert({ owner_id: user.id, title, message, mode: 'directed', original_filename: safeDocumentName(title) }).select('id').single();
     if (workflowError || !workflow) throw new Error('No se pudo crear el flujo.');
     const path = `${workflow.id}/0.pdf`;
@@ -58,4 +60,4 @@ Deno.serve(async request => {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: 400, headers: cors });
   }
-});
+}));
