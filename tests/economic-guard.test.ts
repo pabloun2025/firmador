@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { lifecycleHealthResponse } from '../supabase/functions/_shared/lifecycle-health';
 import { boundedBody, budgetedFetch, protectEndpoint, reserveBudget, reserveDownload, reserveUpload, type BudgetClient } from '../supabase/functions/_shared/economic-guard';
 
 const request = (body = '{}', headers: Record<string,string> = {}) => new Request('https://local.test/endpoint', { method: 'POST', body, headers });
@@ -9,6 +10,25 @@ function client(allowed = true): BudgetClient {
 beforeEach(() => vi.stubGlobal('Deno', { env: { get: (name: string) => ({ SUPABASE_URL: 'https://local.test', SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service-key' } as Record<string,string>)[name] } }));
 afterEach(() => vi.unstubAllGlobals());
 describe('server economic controls', () => {
+  it('checks authenticated maintenance health without executing jobs', async () => {
+    const jobs = vi.fn(() => new Response('jobs executed'));
+    const handler = protectEndpoint('process-lifecycle-jobs', () => client(), async req => await lifecycleHealthResponse(req) ?? jobs());
+    const response = await handler(request('{"healthCheck":true}', { authorization: 'Bearer synthetic-service-key' }));
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ ok: true, mode: 'health', maintenanceExecuted: false });
+    expect(jobs).not.toHaveBeenCalled();
+  });
+  it('does not expose a public health bypass for maintenance', async () => {
+    const jobs = vi.fn(() => new Response('unexpected'));
+    const handler = protectEndpoint('process-lifecycle-jobs', () => client(), async req => await lifecycleHealthResponse(req) ?? jobs());
+    expect((await handler(request('{"healthCheck":true}'))).status).toBe(401);
+    expect(jobs).not.toHaveBeenCalled();
+  });
+  it('keeps normal scheduled maintenance enabled', async () => {
+    const jobs = vi.fn(() => new Response('jobs executed'));
+    const handler = protectEndpoint('process-lifecycle-jobs', () => client(), async req => await lifecycleHealthResponse(req) ?? jobs());
+    const response = await handler(request('{"healthCheck":false}', { authorization: 'Bearer synthetic-service-key' }));
+    expect(await response.text()).toBe('jobs executed'); expect(jobs).toHaveBeenCalledOnce();
+  });
   it('times out a stalled upload rather than accepting an incomplete body', async () => {
     vi.useFakeTimers();
     try {

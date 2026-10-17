@@ -1,6 +1,6 @@
 # Seguridad y consumo — 17 de octubre de 2026
 
-Estado: **protecciones parciales publicadas en Supabase**. Las tres migraciones
+Estado: **protecciones parciales publicadas en Supabase**. Las cuatro migraciones
 y las 15 funciones se publicaron y verificaron el 17 de octubre de 2026, después
 de que el usuario descartara expresamente el respaldo de los PDF de prueba.
 Detalles actuales en `security-release-status.md`.
@@ -28,7 +28,7 @@ Se prepararon recuperación administrativa atómica, serialización de plazas de
 invitación, límite de agenda y cron con credencial generada internamente sin
 copiar secretos. Los PDF y el diseño no se modificaron.
 
-Verificación local: 71 pruebas, build, npm audit sin hallazgos y typecheck de las
+Verificación local: 74 pruebas, build, npm audit sin hallazgos y typecheck de las
 15 funciones con Deno 2.9.6, usando Supabase 2.117.3 de npm como sustituto de
 resolución JSR en un import map local. PostgreSQL 17 aislado verificó concurrencia,
 cuotas, modo de protección, permisos, recuperación e invitaciones. No se probaron
@@ -41,8 +41,11 @@ la misma prueba con un contenedor del job y sin secretos de producción.
 
 Aplicadas con autorización: `20261017010000_security_budgets.sql`,
 `20261017020000_atomic_admin_recovery.sql` y
-`20261017030000_authenticated_maintenance.sql` y las funciones, en la misma
-intervención. Queda observar la siguiente ejecución natural del cron. Revisar
+`20261017030000_authenticated_maintenance.sql`,
+`20261017040000_maintenance_timeout_and_health.sql` y las funciones, en la misma
+intervención. El primer cron natural reveló un timeout de 10 s, ya ampliado a
+120 s; la comprobación de salud autenticada devuelve HTTP 200. Queda observar
+la siguiente ejecución ordinaria con esa ampliación. Revisar
 cuotas con volumen real, Cloudflare/WAF, Spend Cap y facturación de Supabase/Resend.
 No hay garantía de gasto máximo ni auditoría de proyectos fuera de este entorno.
 

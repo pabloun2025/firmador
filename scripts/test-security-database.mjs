@@ -30,7 +30,8 @@ create schema cron; create table cron.job(jobid bigint generated always as ident
 create function cron.unschedule(id bigint) returns boolean language sql as $$ delete from cron.job where jobid=id returning true $$;
 create function cron.schedule(name text,spec text,cmd text) returns bigint language sql as $$ insert into cron.job(jobname,schedule,command) values(name,spec,cmd) returning jobid $$;
 create schema net;
-create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer default 10000) returns bigint language sql as $$ select 1::bigint $$;`);
+create table net.probe_calls(id bigint generated always as identity,timeout_ms integer,health_check boolean);
+create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer default 10000) returns bigint language sql as $$ insert into net.probe_calls(timeout_ms,health_check) values(timeout_milliseconds,(body->>'healthCheck')::boolean) returning 1::bigint $$;`);
 // Minimal synthetic baseline matching the deployed tables used by these changes.
 // Historical migrations cannot be replayed unchanged: an older migration changes
 // release_open_turn's return type without dropping it. Do not hide that defect.
@@ -118,6 +119,11 @@ if(db==='firmador') {
   assert.equal(sql("select public.authorize_lifecycle_job(repeat('0',64));"),'f');
   assert.equal(sql("select public.authorize_lifecycle_job(encode(extensions.digest(token,'sha256'),'hex')) from public.security_internal_credentials where purpose='lifecycle';"),'t');
   assert.equal(sql("select command='select public.dispatch_lifecycle_maintenance();' from cron.job where jobname='leapsign-lifecycle-jobs';"),'t');
+  assert.equal(sql("select public.dispatch_lifecycle_maintenance(true);"),'1');
+  assert.equal(sql("select timeout_ms||':'||health_check from net.probe_calls order by id desc limit 1;"),'120000:true');
+  assert.equal(sql("select public.dispatch_lifecycle_maintenance();"),'1');
+  assert.equal(sql("select timeout_ms||':'||health_check from net.probe_calls order by id desc limit 1;"),'120000:false');
+  assert.equal(sql("select has_function_privilege('anon','public.dispatch_lifecycle_maintenance(boolean)','execute');"),'f');
   sql(`insert into public.superadmin_recovery_codes(user_id,code_hash,expires_at) values('${owner}','synthetic-correct-hash',now()+interval '10 minutes');`);
   for(let i=0;i<5;i++) assert.equal(sql(`select public.consume_superadmin_recovery('${owner}','wrong');`),'f');
   assert.equal(sql(`select public.consume_superadmin_recovery('${owner}','synthetic-correct-hash');`),'f');

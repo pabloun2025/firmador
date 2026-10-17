@@ -1,6 +1,6 @@
 # Estado de publicación de seguridad — 17 de octubre de 2026
 
-Las correcciones de seguridad ya están desplegadas en Supabase: tres migraciones
+Las correcciones de seguridad ya están desplegadas en Supabase: cuatro migraciones
 registradas con sus versiones originales y 15 funciones Edge en estado ACTIVE.
 El usuario autorizó expresamente continuar sin respaldar los PDF de prueba.
 
@@ -35,19 +35,20 @@ crearon endpoints de respaldo ni se extrajeron claves de servicio.
 
 ## Trabajo verificado
 
-Se repitieron las 71 pruebas de LeapSign y su build: ambos aprobados. El conjunto
+Se repitieron las 74 pruebas de LeapSign y su build: ambos aprobados. El conjunto
 de auditoría incluye además las pruebas SQL y Deno descritas en
 `security-audit.md`. Se descargaron los cuerpos de las 15 funciones anteriores
 antes de publicar. Se conserva el punto de restauración del código en GitHub.
 
-Migraciones aplicadas y registradas: `20261017010000`, `20261017020000` y
-`20261017030000`. Cada archivo se aplicó junto con su entrada de historial en una
+Migraciones aplicadas y registradas: `20261017010000`, `20261017020000`,
+`20261017030000` y `20261017040000`. Cada archivo se aplicó junto con su entrada de historial en una
 transacción, sin alterar registros ni binarios PDF de los usuarios.
 
 Verificaciones de producción aprobadas:
 
-- Las 15 funciones figuran como ACTIVE y aumentaron una versión respecto a las
-  descargadas antes del despliegue.
+- Las 15 funciones figuran como ACTIVE y aumentaron su versión respecto a las
+  descargadas antes del despliegue; mantenimiento recibió una segunda publicación
+  para corregir el timeout detectado.
 - El mantenimiento sin autorización devuelve HTTP 401 con `INTERNAL_ONLY`.
 - La ruta pública rechaza datos inválidos con HTTP 400 desde el código de la
   aplicación, lo que también comprueba la reserva de presupuesto en su entorno real.
@@ -56,7 +57,14 @@ Verificaciones de producción aprobadas:
 - La credencial interna del planificador se verifica y el cron utiliza el nuevo
   dispatcher autenticado. No se forzaron ejecuciones ni purgas para probarlo.
 
-La comprobación de una ejecución natural del cron se documentará al observarla.
+El cron se ejecutó naturalmente a las 17:15 UTC. El trabajo SQL terminó con éxito,
+pero su llamada HTTP agotó los 10 segundos de espera. Se corrigió mediante la
+cuarta migración, ampliando la espera a 120 segundos y añadiendo una comprobación
+de salud detrás de la misma autorización. Esa llamada real y autenticada devolvió
+HTTP 200, sin timeout, con `maintenanceExecuted: false`: no se forzaron mensajes
+ni limpiezas para verificarla. La siguiente ejecución ordinaria mantiene la
+frecuencia de quince minutos y todavía no se ha observado con el nuevo timeout.
+
 No se verificó un flujo de firma de principio a fin con una cuenta de usuario,
 ni la facturación/WAF de Cloudflare. CadenaPDF conserva sus cambios preparados
 y requiere infraestructura independiente antes de publicarse.

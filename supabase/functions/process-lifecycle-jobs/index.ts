@@ -1,4 +1,5 @@
 import { protectEndpoint, budgetedFetch } from "../_shared/economic-guard.ts";
+import { lifecycleHealthResponse } from "../_shared/lifecycle-health.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({
@@ -19,6 +20,8 @@ function emailHtml(kind: "reminder_1h" | "reminder_24h", body: string, link: str
 
 Deno.serve(protectEndpoint("process-lifecycle-jobs", createClient, async (request) => {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  const health = await lifecycleHealthResponse(request);
+  if (health) return health;
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const now = new Date();
   const result = { reminders: 0, expired: 0, cleaned: 0, cleanupFailed: 0 };
