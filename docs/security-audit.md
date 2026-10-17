@@ -1,7 +1,9 @@
 # Seguridad y consumo — 17 de octubre de 2026
 
-Estado: **protecciones parciales**. Cambios preparados y probados localmente;
-ningún cambio de esta auditoría ha sido publicado en producción.
+Estado: **protecciones parciales publicadas en Supabase**. Las tres migraciones
+y las 15 funciones se publicaron y verificaron el 17 de octubre de 2026, después
+de que el usuario descartara expresamente el respaldo de los PDF de prueba.
+Detalles actuales en `security-release-status.md`.
 
 Hallazgos prioritarios: mantenimiento sin autorización interna en el código,
 cuotas acumuladas ausentes y CadenaPDF apuntando al mismo backend. La API confirmó
@@ -37,10 +39,10 @@ Para repetir la prueba SQL, crear un contenedor PostgreSQL temporal y ejecutar
 El script crea una base sintética y rechaza sobrescribir una existente. CI ejecuta
 la misma prueba con un contenedor del job y sin secretos de producción.
 
-Pendiente de aprobación: aplicar `20261017010000_security_budgets.sql`,
+Aplicadas con autorización: `20261017010000_security_budgets.sql`,
 `20261017020000_atomic_admin_recovery.sql` y
-`20261017030000_authenticated_maintenance.sql`, después desplegar funciones en la
-misma intervención y comprobar la siguiente ejecución natural del cron. Revisar
+`20261017030000_authenticated_maintenance.sql` y las funciones, en la misma
+intervención. Queda observar la siguiente ejecución natural del cron. Revisar
 cuotas con volumen real, Cloudflare/WAF, Spend Cap y facturación de Supabase/Resend.
 No hay garantía de gasto máximo ni auditoría de proyectos fuera de este entorno.
 
