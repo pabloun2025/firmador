@@ -16,7 +16,7 @@ el top 3. Los empates no desplazan al récord anterior. El botón «Guardar réc
 con aviso de visibilidad pública y alternativa «Omitir», sustituye a la casilla
 de consentimiento. El servidor sigue verificando y decidiendo el podio final
 ante resultados simultáneos. Tres ranitas oro/plata/bronce sobre peldaños.
-La animación decorativa de espera mide 86 px y termina en cuatro segundos,
+La animación de espera mide 86 px y repite los saltos mientras se espera,
 sin botón de pausa; respeta movimiento reducido. El juego conserva su pausa.
 
 Ranking global (no por proceso, usuario ni dispositivo): tres resultados más

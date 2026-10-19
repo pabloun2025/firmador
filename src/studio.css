@@ -93,7 +93,7 @@ label, .login-card label { font-weight: 600; font-size: 13px; }
 .signing-leap-waiting .leap-paper > span { font-size: 7px; }
 .signing-leap-waiting .leap-paper i { height: 2px; margin-top: 3px; }
 .signing-leap-waiting .leap-paper svg { height: 14px; margin-top: 1px; }
-.signing-leap-waiting .signing-frog { animation: leap-compact 4s ease-in-out both; }
+.signing-leap-waiting .signing-frog { animation: leap-compact 4s ease-in-out infinite both; }
 .signing-leap-waiting .leap-paper svg path { animation-duration: 1s; animation-iteration-count: 1; }
 @keyframes leap-compact {
   0%, 12% { left: 0; top: 16px; }

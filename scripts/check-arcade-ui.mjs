@@ -71,6 +71,10 @@ try {
     await page.getByText('Rana veloz',{exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Pausar animación',exact:true}).count(),0);
     const animation=await page.locator('.signing-leap-waiting').boundingBox();assert(animation.height<=90);
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    assert.equal(await page.locator('.signing-leap-waiting .signing-frog').evaluate(el=>getComputedStyle(el).animationIterationCount),'infinite');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    assert.equal(await page.locator('.signing-leap-waiting .signing-frog').evaluate(el=>getComputedStyle(el).animationName),'none');
     const first=await page.locator('.place-1').boundingBox(),second=await page.locator('.place-2').boundingBox();
     assert(first.x>second.x&&first.y<second.y,'First place is centered and taller');
     // A lower result must never ask for a name.
