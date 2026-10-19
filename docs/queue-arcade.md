@@ -1,6 +1,7 @@
 # Salto de firma y podio histórico
 
-Implementación en rama `feature/queue-arcade-top3`. No desplegada.
+Implementación en rama `feature/queue-arcade-top3`. Publicación autorizada el
+19 de octubre de 2026 para `firma.veryfacil.org`, sin cambiar `leapsign.app`.
 
 ## Experiencia
 
@@ -53,11 +54,16 @@ proveedor. La retirada de alias se solicita por el contacto de privacidad.
   saltos, pausa, alias/consentimiento, envío único, recarga y caída del ranking
   con modo práctica; todas las peticiones externas interceptadas.
 
-## Publicación pendiente
+## Publicación
 
-Requiere autorización específica para aplicar la migración
-`20261019010000_queue_arcade.sql`, desplegar `queue-arcade` con la configuración
-de puerta de acceso existente y publicar el frontend. No requiere servicios,
+Se aplicó la migración `20261019010000_queue_arcade.sql` de forma transaccional,
+registrada en el historial, y se desplegó `queue-arcade` (ACTIVE, versión 1,
+verify_jwt habilitado). La lectura pública del podio respondió HTTP 200 con
+lista vacía, sin insertar récords de prueba. Permisos directos de tablas y RPC
+denegados a anon. Copia Git verificada y etiqueta de recuperación
+`restore/leapsign-before-arcade-20261019`. La web se publica automáticamente al
+enviar el commit a `main`; confirmar su finalización en Cloudflare.
+No requiere servicios,
 proveedores de IA, bibliotecas ni credenciales nuevas. No ejecutar migraciones
 históricas ni cambiar tablas del flujo de firma. Mientras el backend no esté
 instalado, el frontend ofrece práctica y muestra la indisponibilidad del podio.
