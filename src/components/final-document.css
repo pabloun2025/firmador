@@ -1,0 +1,11 @@
+.final-share-card { border: 1px solid #c7d8c1; border-radius: 8px; background: #f1f5eb; padding: 20px; margin: 20px 0; }
+.final-share-card h4 { margin: 0; font-size: 18px; font-weight: 600; }
+.final-share-card > p { font-size: 13px; color: #3e5d4d; line-height: 1.6; }
+.final-share-url { display: block; overflow-wrap: anywhere; padding: 12px; border: 1px solid #d3decf; border-radius: 5px; background: #fff; color: #205840; font: 12px/1.65 ui-monospace,monospace; }
+.final-share-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 12px; }
+.final-email { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; padding: 10px 14px; background: #fff; border: 1px solid #c7d8c1; }
+.final-share-card > small, .final-document-page > small { display: block; font-size: 12px; color: #455e4e; line-height: 1.6; }
+.final-document-page h1 { overflow-wrap: anywhere; }
+.final-document-page .primary { margin-top: 16px; }
+.round-card.final-document-page > p { line-height: 1.65; color: #455e4e; }
+@media(max-width:600px) { .final-share-card { padding: 16px; } .final-share-actions > * { flex: 1 1 auto; min-height: 44px; text-align: center; } }

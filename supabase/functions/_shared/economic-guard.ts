@@ -49,7 +49,7 @@ export async function boundedBody(request: Request, maxBytes: number): Promise<R
     return new Request(request.url, { method: request.method, headers: request.headers, body: bytes });
   } finally { clearTimeout(timeout); reader.releaseLock(); }
 }
-const ownerEndpoints = new Set(['create-round', 'create-directed', 'send-round-invitations', 'get-owner-round', 'owner-round-action', 'owner-download-version', 'superadmin-console', 'superadmin-recovery']);
+const ownerEndpoints = new Set(['create-round', 'create-directed', 'send-round-invitations', 'get-owner-round', 'owner-round-action', 'owner-download-version', 'owner-final-share', 'superadmin-console', 'superadmin-recovery']);
 const uploadEndpoints = new Set(['create-round', 'create-directed', 'submit-signed-version']);
 export function protectEndpoint(endpoint: string, createClient: ClientFactory, handler: Handler): (request: Request) => Promise<Response> {
   return async request => {

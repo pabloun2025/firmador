@@ -7,6 +7,7 @@ import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
 import { QueueArcade } from "./components/QueueArcade";
+import { FinalDocument, FinalShareCard } from "./components/FinalDocument";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -290,6 +291,10 @@ const LEGAL_CONTENT = {
       [
         "Acceso y protección",
         "Los PDF permanecen en almacenamiento privado. El acceso se autoriza desde el servidor mediante enlaces personales y temporales; las comunicaciones usan HTTPS y el proveedor protege los datos almacenados. Ningún sistema conectado puede garantizar riesgo cero.",
+      ],
+      [
+        "Compartir el documento final",
+        "Después del cierre, el creador puede compartir un enlace de descarga del PDF final. Cualquier persona que reciba ese enlace podrá descargarlo hasta que caduque o el documento deje de estar disponible. No permite firmar ni administrar el proceso. Compártelo solo con sus destinatarios y evita reenviarlo sin permiso.",
       ],
       [
         "Conservación",
@@ -1308,6 +1313,11 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
       );
       await openRound(roundId);
       await loadRounds();
+      if (action === "finalize") window.setTimeout(() => {
+        const share = window.document.querySelector<HTMLElement>('.final-share-card');
+        share?.focus({preventScroll:true});
+        share?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});
+      }, 50);
     }
   }
   async function downloadVersion(versionId?: string) {
@@ -1468,6 +1478,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               </button>
             </div>
           </div>
+          {selected.workflow.status === "completed" && <FinalShareCard workflowId={selected.workflow.id} />}
           <dl>
             <div>
               <dt>Versión vigente</dt>
@@ -1638,6 +1649,8 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
 }
 
 function App() {
+  const finalMatch = window.location.pathname.match(/^\/f\/([A-Za-z0-9_-]{22}|[0-9a-f-]{36})$/);
+  if (finalMatch) return <main className="round"><Brand /><FinalDocument id={expandRoundId(finalMatch[1])} /></main>;
   const legalPage = window.location.pathname.slice(
     1,
   ) as keyof typeof LEGAL_CONTENT;

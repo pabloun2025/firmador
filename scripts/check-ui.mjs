@@ -57,6 +57,13 @@ function mockProcess(context) {
       }
       if (slug === 'owner-round-action') { state.actions.push(payload.action); if (payload.action === 'finalize') state.status = 'completed'; return route.fulfill({ json: { ok: true } }); }
       if (slug === 'owner-download-version') return route.fulfill({ json: { url: 'https://files.example.test/final.pdf' } });
+      if (slug === 'owner-final-share') return state.status === 'completed'
+        ? route.fulfill({json:{token:'a'.repeat(43),title:'Contrato de prueba',expiresAt:new Date(Date.now()+5*86400000).toISOString()}})
+        : route.fulfill({status:404,json:{error:'Not final'}});
+      if (slug === 'download-final-share') {
+        if(state.status!=='completed'||state.expiredFinal||payload.token!=='a'.repeat(43))return route.fulfill({status:404,json:{error:'Enlace no disponible'}});
+        return route.fulfill({json:payload.action==='download'?{url:'https://files.example.test/final.pdf'}:{title:'Contrato de prueba',expiresAt:new Date(Date.now()+5*86400000).toISOString()}});
+      }
       if (slug === 'get-round') return route.fulfill({ json: { title: 'Contrato de prueba', message: '', needsKey: false } });
       if (slug === 'take-open-turn') return route.fulfill({ json: state.waiting ? { state: 'waiting', position: 3 } : { state: 'active', expires_at: new Date(Date.now() + 600000).toISOString(), holder_name: 'Beatriz Prueba', email: 'bea@example.test' } });
       if (slug === 'participant-download-version') { state.downloads++; return route.fulfill({ json: { url: 'https://files.example.test/Contrato.pdf', expectedFilename: 'Contrato de prueba.pdf', parentByteSize: 500 } }); }
@@ -226,6 +233,38 @@ try {
       await flow.getByText('Finalizado', { exact: true }).first().waitFor();
       assert.deepEqual(state.actions, ['finalize']);
     });
+    const finalShare=flow.getByRole('region',{name:'Compartir documento finalizado'});
+    await finalShare.getByRole('link',{name:'WhatsApp',exact:true}).waitFor();
+    const finalUrl=await finalShare.locator('.final-share-url').getAttribute('href');
+    await check(`final link, WhatsApp and email contain the same final URL (${width})`,async()=>{
+      assert(finalUrl.includes('/f/')&&new URL(finalUrl).hash.length===44);
+      assert(new URL(await finalShare.getByRole('link',{name:'WhatsApp',exact:true}).getAttribute('href')).searchParams.get('text').includes(finalUrl));
+      const mail=new URL(await finalShare.getByRole('link',{name:'Compartir por correo'}).getAttribute('href'));
+      assert.equal(mail.protocol,'mailto:');assert(mail.searchParams.get('body').includes(finalUrl));
+      assert(mail.searchParams.get('body').includes('No es una invitación'));
+    });
+    await finalShare.scrollIntoViewIfNeeded();
+    await flow.screenshot({path:`${output}/final-share-${width}.png`,fullPage:true});
+    await accessibility(flow,`final share ${width}`);
+    const receiverContext=await isolatedContext(width),receiverFixture=mockProcess(receiverContext);
+    receiverFixture.state.status='completed';await receiverFixture.setup();
+    await receiverContext.route('https://files.example.test/final.pdf',r=>r.fulfill({contentType:'application/pdf',headers:{'Content-Disposition':'attachment; filename="Contrato_final.pdf"'},body:Buffer.from('%PDF-1.4 synthetic-only')}));
+    const receiver=await receiverContext.newPage();
+    await receiver.goto(finalUrl);
+    await receiver.getByRole('button',{name:'Descargar PDF final',exact:true}).waitFor();
+    await check(`final receiver needs no login or signing turn (${width})`,async()=>{
+      assert.equal(await receiver.getByLabel('Correo',{exact:true}).count(),0);
+      assert.equal(await receiver.getByRole('button',{name:'Solicitar turno para firmar',exact:true}).count(),0);
+      const download=receiver.waitForEvent('download');await receiver.getByRole('button',{name:'Descargar PDF final',exact:true}).click();await download;
+    });
+    await receiver.screenshot({path:`${output}/final-receiver-${width}.png`,fullPage:true});
+    await accessibility(receiver,`final receiver ${width}`);
+    receiverFixture.state.expiredFinal=true;await receiver.reload();
+    await check(`expired final links show no download (${width})`,async()=>{
+      await receiver.getByRole('heading',{name:'Este enlace ya no está disponible'}).waitFor();
+      assert.equal(await receiver.getByRole('button',{name:'Descargar PDF final',exact:true}).count(),0);
+    });
+    await receiverContext.close();
     await flowContext.close();
 
     const signerContext = await isolatedContext(width);
