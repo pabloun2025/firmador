@@ -12,7 +12,10 @@ beforeEach(async () => {
   fixture.client = {
     rpc: async (name: string, args: any) => {
       budgets.push(name);
-      if (name === 'reserve_security_budget') return { data: { allowed: !failed }, error: null };
+      if (name === 'reserve_security_budget') {
+        if (!['requests','uploads','downloads','emails','creation','maintenance'].includes(args.p_service)) return { data: null, error: { message: 'invalid budget reservation' } };
+        return { data: { allowed: !failed }, error: null };
+      }
       if (name === 'start_queue_game') return { data: { id, seed: 42 }, error: null };
       finished = args; run = null; return { data: { ranked: true, records: [] }, error: null };
     },
@@ -36,6 +39,12 @@ it('fails closed when the shared budget is unavailable', async () => {
   failed = true;
   expect((await handler(request({ action: 'start' }))).status).toBe(429);
   expect(budgets).not.toContain('start_queue_game');
+});
+it('starts a real ranking ticket using only budget services accepted by the database', async () => {
+  const response = await handler(request({ action: 'start' }));
+  expect(response.status).toBe(200);
+  expect((await response.json()).id).toBe(id);
+  expect(budgets).toContain('start_queue_game');
 });
 it('requires voluntary consent and a safe alias', async () => {
   expect((await handler(request({ action: 'finish', id, alias: 'Rana', consent: false }))).status).toBe(400);

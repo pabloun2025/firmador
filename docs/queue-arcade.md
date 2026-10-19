@@ -10,7 +10,7 @@ progresiva. El juego ya se muestra abierto; se inicia explícitamente. Teclado,
 táctil y botones, pausa manual y pausa automática al ocultar la pestaña.
 El juego no modifica la cola ni bloquea que llegue el turno de firma.
 
-Revisión compacta (rama `design/compact-arcade-podium`, pendiente de publicación):
+Revisión compacta (publicada en `2d8886f`):
 solo se solicitan iniciales/nombre cuando un resultado positivo puede entrar en
 el top 3. Los empates no desplazan al récord anterior. El botón «Guardar récord»,
 con aviso de visibilidad pública y alternativa «Omitir», sustituye a la casilla
@@ -18,6 +18,14 @@ de consentimiento. El servidor sigue verificando y decidiendo el podio final
 ante resultados simultáneos. Tres ranitas oro/plata/bronce sobre peldaños.
 La animación de espera mide 86 px y repite los saltos mientras se espera,
 sin botón de pausa; respeta movimiento reducido. El juego conserva su pausa.
+El podio secundario se limita a 240 px de ancho, con ranitas de 28 px y
+peldaños de 24/17/12 px para reducir su prominencia.
+
+Corrección de inicio: el guard de la base de datos acepta una lista cerrada de
+servicios y no reconoce `arcade`. La Edge usa ahora `requests`, manteniendo
+intactos los scopes y límites del juego. Se reprodujo primero el HTTP 503 con
+una prueba negativa; el contrato se prueba también contra PostgreSQL real en
+un contenedor desechable. No se cambió el esquema ni se desactivaron cuotas.
 
 Ranking global (no por proceso, usuario ni dispositivo): tres resultados más
 altos, con desempate por antigüedad. El alias y resultado se publican únicamente

@@ -16,7 +16,9 @@ Deno.serve(protectEndpoint('queue-arcade', createClient, async request => {
       const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
       const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip)));
       const slot = ((digest[0] << 8) | digest[1]) % 1024;
-      await reserveBudget(admin, 'arcade', [
+      // The shared ledger accepts a fixed service list. Keep arcade-specific
+      // scopes and caps under requests, not an unsupported service category.
+      await reserveBudget(admin, 'requests', [
         { scope:'shared:arcade-start',period:86400,amount:1,policy:'arcade_daily',limit:300 },
         { scope:`arcade:${slot}`,period:3600,amount:1,policy:'arcade_source_hourly',limit:10 },
       ]);

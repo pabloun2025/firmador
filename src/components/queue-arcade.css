@@ -17,18 +17,18 @@
 .arcade-save input:not([type=checkbox]) { font-size: 16px; width: 100%; min-width: 0; }
 .arcade-save > small { display: block; font-size: 11px; line-height: 1.5; color: #525b42; }
 .arcade-save-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
-.arcade-ranking { margin-top: 14px; padding-top: 12px; border-top: 1px solid #d2ddca; }
+.arcade-ranking { margin-top: 10px; padding-top: 8px; border-top: 1px solid #d2ddca; }
 .arcade-ranking-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.arcade-ranking-heading strong { font-size: 14px; }
-.arcade-ranking-heading > span { font-size: 9px; letter-spacing: .1em; color: #52634f; }
-.arcade-podium { list-style: none; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: end; gap: 5px; padding: 0; margin: 8px 0 0; }
+.arcade-ranking-heading strong { font-size: 12px; font-weight: 500; }
+.arcade-ranking-heading > span { font-size: 9px; letter-spacing: .04em; color: #52634f; }
+.arcade-podium { list-style: none; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: end; gap: 4px; max-width: 240px; padding: 0; margin: 4px auto 0; }
 .podium-place { min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; grid-row: 1; }
-.place-1 { grid-column: 2; --medal: #b98c25; --step: #eddfa9; --height: 42px; }
-.place-2 { grid-column: 1; --medal: #7f9098; --step: #e1e6e6; --height: 28px; }
-.place-3 { grid-column: 3; --medal: #ad7145; --step: #e9d7c6; --height: 18px; }
-.podium-frog { width: 44px; height: 43px; flex: 0 0 auto; color: var(--medal); }
+.place-1 { grid-column: 2; --medal: #b98c25; --step: #eddfa9; --height: 24px; }
+.place-2 { grid-column: 1; --medal: #7f9098; --step: #e1e6e6; --height: 17px; }
+.place-3 { grid-column: 3; --medal: #ad7145; --step: #e9d7c6; --height: 12px; }
+.podium-frog { width: 28px; height: 28px; flex: 0 0 auto; color: var(--medal); }
 .podium-place strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 1.6; color: #294d39; font-weight: 600; }
-.podium-points { font-family: ui-monospace, monospace; font-size: 14px; font-weight: 600; color: #294d39; }
-.podium-step { width: 100%; height: var(--height); border-radius: 4px 4px 0 0; background: var(--step); display: grid; place-items: center; color: #3b4c36; font-size: 12px; font-weight: 700; margin-top: 5px; }
+.podium-points { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 500; color: #294d39; }
+.podium-step { width: 100%; height: var(--height); border-radius: 3px 3px 0 0; background: var(--step); display: grid; place-items: center; color: #3b4c36; font-size: 10px; font-weight: 600; margin-top: 3px; }
 .arcade-ranking > p { display: block; font-size: 11px; line-height: 1.6; color: #52634f; }
 @media(max-width:600px) { .arcade { padding: 16px; } .arcade-controls { flex-wrap: wrap; } .arcade-title h3 { font-size: 23px; } }

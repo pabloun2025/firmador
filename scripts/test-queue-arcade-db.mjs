@@ -11,6 +11,14 @@ function sql(query) {
 const created = spawnSync('docker',['exec',container,'createdb','-U','postgres','arcade']);
 if (created.status) throw new Error('Use a fresh database; no reset is performed');
 sql('create role anon; create role authenticated; create role service_role bypassrls;');
+const budgetSource = readFileSync('supabase/migrations/20261017010000_security_budgets.sql','utf8');
+sql(budgetSource.slice(0,budgetSource.indexOf('create or replace function public.enforce_workflow_security_budget()')));
+const arcadeSource = readFileSync('supabase/functions/queue-arcade/index.ts','utf8');
+const service = arcadeSource.match(/reserveBudget\(admin, '([^']+)'/)[1];
+assert.throws(() => sql(`select public.reserve_security_budget('arcade','[{"scope":"shared:arcade-start","period":86400,"amount":1,"policy":"arcade_daily","limit":300}]');`));
+assert.equal(JSON.parse(sql(`select public.reserve_security_budget('${service}','[{"scope":"shared:arcade-start","period":86400,"amount":1,"policy":"arcade_daily","limit":300}]');`)).allowed,true);
+assert.equal(sql("select used from public.security_budget_usage where scope='shared:arcade-start';"),'1');
+console.log('PASS actual database ledger accepts the Edge arcade service and reserves its own quota');
 sql(readFileSync('supabase/migrations/20261019010000_queue_arcade.sql','utf8'));
 const run = () => JSON.parse(sql('select public.start_queue_game(42);')).id;
 const finish = (id, score, alias='Rana') => JSON.parse(sql(`select public.finish_queue_game('${id}','${alias}',${score});`));
