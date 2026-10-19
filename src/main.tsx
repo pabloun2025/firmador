@@ -6,6 +6,7 @@ import { expandRoundId, roundPath } from "./lib/round-link";
 import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
+import { QueueArcade } from "./components/QueueArcade";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -299,6 +300,10 @@ const LEGAL_CONTENT = {
         "Tus derechos",
         "Puedes consultar, descargar y eliminar tus procesos desde tu espacio. Para ejercer derechos de acceso, rectificación, supresión, limitación u oposición, escribe a pabloun@gmail.com.",
       ],
+      [
+        "Ranking opcional del juego",
+        "Solo si lo autorizas, tu alias y puntuación pueden aparecer en el top 3 público del minijuego. Los récords se conservan mientras permanezcan entre los tres mejores, independientemente de los documentos. No uses tu nombre completo, correo u otros datos personales como alias. Puedes solicitar su retirada escribiendo a pabloun@gmail.com. Las partidas de validación caducan a los 10 minutos y se limpian al iniciar nuevas partidas.",
+      ],
     ],
   },
   seguridad: {
@@ -392,85 +397,6 @@ function LegalPage({ page }: { page: keyof typeof LEGAL_CONTENT }) {
   );
 }
 
-function FrogQueueGame() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const jumpRef = useRef<() => void>(() => undefined);
-  const [playing, setPlaying] = useState(false);
-  const [score, setScore] = useState(0);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    let frame = 0;
-    let frogY = 0;
-    let velocity = 0;
-    let obstacleX = playing ? canvas.width + 25 : 245;
-    let raf = 0;
-    const jump = () => { if (frogY === 0) velocity = 8.2; };
-    jumpRef.current = playing ? jump : () => undefined;
-    const key = (event: KeyboardEvent) => {
-      if (event.code === "Space" || event.code === "ArrowUp") { event.preventDefault(); jump(); }
-    };
-    const drawDocument = (x: number) => {
-      context.fillStyle = "#ffffff";
-      context.strokeStyle = "#6f9b89";
-      context.lineWidth = 2;
-      context.beginPath(); context.roundRect(x, 58, 24, 30, 3); context.fill(); context.stroke();
-      context.fillStyle = "#c9dcd2";
-      context.fillRect(x + 5, 66, 14, 2); context.fillRect(x + 5, 72, 11, 2); context.fillRect(x + 5, 78, 14, 2);
-      context.fillStyle = "#d5b567";
-      context.beginPath(); context.moveTo(x + 17, 58); context.lineTo(x + 24, 65); context.lineTo(x + 17, 65); context.closePath(); context.fill();
-    };
-    const drawFrog = (lift: number) => {
-      const y = 72 - lift;
-      context.strokeStyle = "#0d4538"; context.lineWidth = 4; context.lineCap = "round";
-      context.beginPath(); context.moveTo(27, y + 8); context.lineTo(19, y + 14); context.moveTo(49, y + 8); context.lineTo(57, y + 14); context.stroke();
-      context.fillStyle = "#17614e";
-      context.beginPath(); context.ellipse(38, y + 4, 15, 12, 0, 0, Math.PI * 2); context.fill();
-      context.beginPath(); context.arc(31, y - 6, 6, 0, Math.PI * 2); context.arc(45, y - 6, 6, 0, Math.PI * 2); context.fill();
-      context.fillStyle = "#f4d477";
-      context.beginPath(); context.arc(31, y - 7, 2.2, 0, Math.PI * 2); context.arc(45, y - 7, 2.2, 0, Math.PI * 2); context.fill();
-      context.strokeStyle = "#f4d477"; context.lineWidth = 1.5;
-      context.beginPath(); context.arc(38, y + 4, 6, .15, Math.PI - .15); context.stroke();
-    };
-    const draw = (animate = true) => {
-      if (animate) {
-        frame += 1;
-        velocity -= .42;
-        frogY = Math.max(0, frogY + velocity);
-        if (frogY === 0) velocity = 0;
-        obstacleX -= 3.2 + Math.min(score * .08, 1.3);
-        if (obstacleX < -28) { obstacleX = canvas.width + 35 + Math.random() * 95; setScore((value) => value + 1); }
-      }
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, "#edf7f1"); gradient.addColorStop(1, "#ffffff");
-      context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = "#d8b65e";
-      for (let index = 0; index < 7; index += 1) context.fillRect((index * 71 + frame * .35) % canvas.width, 18 + (index % 3) * 7, 2, 2);
-      context.strokeStyle = "#cbdad3"; context.lineWidth = 2;
-      context.beginPath(); context.moveTo(0, 87); context.lineTo(canvas.width, 87); context.stroke();
-      drawDocument(obstacleX);
-      if (!playing) { drawDocument(325); drawDocument(375); }
-      drawFrog(frogY);
-      const collision = obstacleX < 56 && obstacleX + 24 > 20 && frogY < 25;
-      if (collision) { setPlaying(false); return; }
-      if (animate) raf = window.requestAnimationFrame(() => draw(true));
-    };
-    draw(playing);
-    if (playing) canvas.addEventListener("keydown", key);
-    return () => { window.cancelAnimationFrame(raf); canvas.removeEventListener("keydown", key); };
-  }, [playing]);
-  return <section className="queue-game" aria-label="Juego opcional durante la espera">
-    <div className="queue-game-title"><span><FrogMark /></span><div><strong>Haz saltar la firma</strong><small>La cola continúa actualizándose mientras juegas.</small></div></div>
-    <div className="queue-game-body">
-      <div className="queue-game-head"><strong>Rana vs. documentos</strong><span>{score ? `Documentos superados: ${score}` : "¿Cuántos podrás saltar?"}</span></div>
-      <canvas ref={canvasRef} width={420} height={105} tabIndex={playing ? 0 : -1} aria-label="Minijuego de una rana saltando documentos PDF" />
-      <p>Usa espacio, la flecha ↑ o el botón para saltar cada PDF.</p>
-      <div><button type="button" className="signout" onClick={() => { setScore(0); setPlaying(true); canvasRef.current?.focus(); }}>{playing ? "Reiniciar" : score ? "Volver a jugar" : "Empezar"}</button><button type="button" className="primary" disabled={!playing} onClick={() => jumpRef.current()}>Saltar</button></div>
-    </div>
-  </section>;
-}
 
 function WaitingRoom({ position, lastChecked }: { position: number; lastChecked: Date | null }) {
   return <section className="waiting-room">
@@ -482,7 +408,7 @@ function WaitingRoom({ position, lastChecked }: { position: number; lastChecked:
     </div>
     <SigningLeap waiting />
     <small>Se comprueba cada 5 segundos mientras esta pantalla está visible{lastChecked ? ` · última ${lastChecked.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}</small>
-    <FrogQueueGame />
+    <QueueArcade />
   </section>;
 }
 

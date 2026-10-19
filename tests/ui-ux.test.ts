@@ -36,10 +36,12 @@ describe("LeapSign task-oriented interface", () => {
   });
 
   it("shows the queue game immediately and depicts a frog jumping PDFs", () => {
-    expect(app).toContain('className="queue-game"');
-    expect(app).toContain("Rana vs. documentos");
-    expect(app).toContain("saltando documentos PDF");
-    expect(app).not.toContain('<details className="queue-game">');
+    const arcade = readFileSync("src/components/QueueArcade.tsx", "utf8");
+    expect(app).toContain('<QueueArcade />');
+    expect(arcade).toContain('className="queue-game arcade"');
+    expect(arcade).toContain("Salto de firma");
+    expect(arcade).toContain("saltando documentos PDF");
+    expect(arcade).not.toContain('<details');
   });
 
   it("refreshes tracking periodically and collapses inactive sections", () => {

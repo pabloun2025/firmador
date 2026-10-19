@@ -1,0 +1,30 @@
+.arcade { background: #fffef8; border: 1px solid #bcccb8; border-radius: 10px; padding: 20px; margin-top: 24px; text-align: left; }
+.arcade-title { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.arcade-title h3 { font-family: Georgia, serif; font-size: 25px; font-weight: 400; margin: 0; color: #193f32; }
+.arcade-score { display: grid; min-width: 57px; text-align: center; font-size: 28px; line-height: 1.1; color: #184d37; font-variant-numeric: tabular-nums; }
+.arcade-score small { font-size: 10px; letter-spacing: .1em; margin-top: 4px; }
+.arcade-subtitle { margin: 10px 0 16px; color: #4b6454; font-size: 12px; }
+.arcade-stage { overflow: hidden; border-radius: 6px; border: 1px solid #bbceb3; background: #e8eedf; }
+.arcade canvas { display: block; width: 100%; height: auto; border: 0; border-radius: 0; touch-action: manipulation; }
+.arcade-help { font-size: 11px; line-height: 1.6; color: #52634f; margin: 10px 0 14px; }
+.arcade-controls { display: flex; gap: 8px; }
+.arcade-controls .primary { margin-left: auto; min-width: 100px; }
+.arcade-controls button { min-height: 44px; }
+.arcade-result, .arcade-message { font-size: 12px; padding: 12px; background: #edf2e6; color: #234e37; border-left: 3px solid #748b52; }
+.arcade-save { margin-top: 18px; border-top: 1px solid #d2ddca; padding-top: 4px; }
+.arcade-save label { font-size: 12px; }
+.arcade-save input:not([type=checkbox]) { font-size: 16px; width: 100%; min-width: 0; }
+.arcade-consent { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; line-height: 1.5; }
+.arcade-consent input { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; margin: 2px 0; }
+.arcade-ranking { margin-top: 22px; padding-top: 18px; border-top: 1px solid #d2ddca; }
+.arcade-ranking-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.arcade-ranking-heading strong { font-size: 14px; }
+.arcade-ranking-heading > span { font-size: 9px; letter-spacing: .1em; color: #52634f; }
+.arcade-ranking ol { padding: 0; list-style: none; margin: 12px 0; }
+.arcade-ranking li { display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e2e7db; font-size: 12px; }
+.arcade-ranking li strong { overflow-wrap: anywhere; font-weight: 600; }
+.arcade-ranking li > span:last-child { font-variant-numeric: tabular-nums; font-size: 11px; color: #4b6454; }
+.podium-rank { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #e5ebde; color: #35513d; }
+.podium-rank.rank-1 { background: #e8d7a0; color: #4b3f19; }
+.arcade-ranking > small, .arcade-ranking > p { display: block; font-size: 11px; line-height: 1.6; color: #52634f; }
+@media(max-width:600px) { .arcade { padding: 16px; } .arcade-controls { flex-wrap: wrap; } .arcade-title h3 { font-size: 23px; } }
