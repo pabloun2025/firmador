@@ -5,6 +5,7 @@ import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
 import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
 import { whatsappShareUrl } from "./lib/share";
+import { startPolling } from "./lib/polling";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -167,10 +168,16 @@ function Notice({
 function DocumentArt() {
   return (
     <figure className="document-art">
+      <picture>
+      <source media="(min-width: 601px)" srcSet="/leapsign-secure-flow.png" />
       <img
-        src="/leapsign-secure-flow.png"
+        src="/frog-mark.svg"
+        width={1536}
+        height={1024}
+        decoding="async"
         alt="Una rana avanza entre las versiones protegidas de un documento"
       />
+      </picture>
     </figure>
   );
 }
@@ -450,28 +457,30 @@ function FrogQueueGame() {
       if (animate) raf = window.requestAnimationFrame(() => draw(true));
     };
     draw(playing);
-    if (playing) window.addEventListener("keydown", key);
-    return () => { window.cancelAnimationFrame(raf); window.removeEventListener("keydown", key); };
+    if (playing) canvas.addEventListener("keydown", key);
+    return () => { window.cancelAnimationFrame(raf); canvas.removeEventListener("keydown", key); };
   }, [playing]);
   return <section className="queue-game" aria-label="Juego opcional durante la espera">
     <div className="queue-game-title"><span><FrogMark /></span><div><strong>Haz saltar la firma</strong><small>La cola continúa actualizándose mientras juegas.</small></div></div>
     <div className="queue-game-body">
       <div className="queue-game-head"><strong>Rana vs. documentos</strong><span>{score ? `Documentos superados: ${score}` : "¿Cuántos podrás saltar?"}</span></div>
-      <canvas ref={canvasRef} width={420} height={105} aria-label="Minijuego de una rana saltando documentos PDF" />
+      <canvas ref={canvasRef} width={420} height={105} tabIndex={playing ? 0 : -1} aria-label="Minijuego de una rana saltando documentos PDF" />
       <p>Usa espacio, la flecha ↑ o el botón para saltar cada PDF.</p>
-      <div><button type="button" className="signout" onClick={() => { setScore(0); setPlaying(true); }}>{playing ? "Reiniciar" : score ? "Volver a jugar" : "Empezar"}</button><button type="button" className="primary" disabled={!playing} onClick={() => jumpRef.current()}>Saltar</button></div>
+      <div><button type="button" className="signout" onClick={() => { setScore(0); setPlaying(true); canvasRef.current?.focus(); }}>{playing ? "Reiniciar" : score ? "Volver a jugar" : "Empezar"}</button><button type="button" className="primary" disabled={!playing} onClick={() => jumpRef.current()}>Saltar</button></div>
     </div>
   </section>;
 }
 
 function WaitingRoom({ position, lastChecked }: { position: number; lastChecked: Date | null }) {
-  return <section className="waiting-room" aria-live="polite">
+  return <section className="waiting-room">
     <div className="waiting-live"><span className="live-dot" /> Estado en directo</div>
     <h2>Estás en la cola</h2>
+    <div role="status" aria-atomic="true">
     <strong className="waiting-position">{Math.max(0, position - 1)}</strong>
     <p>{position <= 1 ? "Eres la siguiente persona." : `personas delante de ti`}</p>
+    </div>
     <div className="queue-motion" aria-hidden="true"><span /><i /></div>
-    <small>Comprobación automática cada 5 segundos{lastChecked ? ` · última ${lastChecked.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}</small>
+    <small>Se comprueba cada 5 segundos mientras esta pantalla está visible{lastChecked ? ` · última ${lastChecked.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}</small>
     <FrogQueueGame />
   </section>;
 }
@@ -513,6 +522,9 @@ function RoundAccess({ id }: { id: string }) {
   const turnToken = query.get("turn") || "";
   const queueToken = query.get("queue") || "";
   const inviteToken = query.get("invite") || "";
+  const turnRequest = useRef(false);
+  const refreshTurn = useRef<() => Promise<void>>(async () => {});
+  refreshTurn.current = takeTurn;
   const [autoOpened, setAutoOpened] = useState(false);
   const [autoRestored, setAutoRestored] = useState(false);
   const sessionId =
@@ -530,10 +542,7 @@ function RoundAccess({ id }: { id: string }) {
   }, [queueToken, turnToken, inviteToken, round, autoRestored]);
   useEffect(() => {
     if (turn?.state !== "waiting") return;
-    const timer = window.setInterval(() => {
-      void takeTurn();
-    }, 5000);
-    return () => window.clearInterval(timer);
+    return startPolling(() => refreshTurn.current(), 5000);
   }, [turn?.state]);
   useEffect(() => {
     if (turn?.state !== "active" || !turn.expires_at) return;
@@ -582,12 +591,15 @@ function RoundAccess({ id }: { id: string }) {
     setBusy(false);
   }
   async function takeTurn() {
+    if (turnRequest.current) return;
     if (!name.trim() && !queueToken && !turnToken && !inviteToken) {
       setNoticeTarget("turn");
       setNoticeTone("error");
       return setNotice("Escribe tu nombre para tomar un turno.");
     }
+    turnRequest.current = true;
     setBusy(true);
+    try {
     const s = await getSupabase();
     const { data, error } = await s.functions.invoke("take-open-turn", {
       body: {
@@ -612,6 +624,13 @@ function RoundAccess({ id }: { id: string }) {
         ),
       );
     } else {
+      if (data.state === "active" && (turn?.state !== "active" || turn.expires_at !== data.expires_at)) {
+        setDownloaded(false);
+        setReviewedPrevious(false);
+        setSignedDocument(null);
+        setParentByteSize(null);
+        setExpectedFilename("");
+      }
       setTurnExpired(false);
       setTurn(data);
       if (data.holder_name) setName(data.holder_name);
@@ -619,7 +638,14 @@ function RoundAccess({ id }: { id: string }) {
       setNotice("");
       setLastQueueCheck(new Date());
     }
-    setBusy(false);
+    } catch {
+      setNoticeTarget("turn");
+      setNoticeTone("error");
+      setNotice("No pudimos actualizar tu turno. Comprueba la conexión e inténtalo de nuevo.");
+    } finally {
+      turnRequest.current = false;
+      setBusy(false);
+    }
   }
   async function downloadCurrentDocument() {
     setBusy(true);
@@ -990,7 +1016,7 @@ function RoundAccess({ id }: { id: string }) {
         </span>
         <h1>{round.title}</h1>
         {round.message && <p>{round.message}</p>}
-        <div className="round-instruction">
+        {turn?.state !== "waiting" && <><div className="round-instruction">
           <strong>Solicita tu turno</strong>
           <span>Cuando te corresponda, podrás descargar el PDF y subirlo firmado.</span>
         </div>
@@ -1011,6 +1037,7 @@ function RoundAccess({ id }: { id: string }) {
             placeholder="Opcional para identificarte"
           />
         </label>
+        </>}
         {turn?.state === "waiting" && <WaitingRoom position={turn.position ?? 1} lastChecked={lastQueueCheck} />}
         <button className="primary wide" onClick={takeTurn} disabled={busy}>
           {turn?.state === "waiting"
@@ -1240,31 +1267,54 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
   const [notice, setNotice] = useState("");
   const [finalConfirmed, setFinalConfirmed] = useState(false);
   const [lastTrackingRefresh, setLastTrackingRefresh] = useState<Date | null>(null);
+  const [trackingError, setTrackingError] = useState("");
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState("");
+  const trackingRequest = useRef<string | null>(null);
+  const trackingSequence = useRef(0);
   async function loadRounds() {
+    setListLoading(true);
+    try {
     const s = await getSupabase();
     const { data, error } = await s
       .from("workflows")
       .select("id,title,status,created_at,signature_count,expected_signature_count")
       .order("created_at", { ascending: false })
       .limit(20);
-    if (error) setNotice("No pudimos cargar tus rondas.");
-    else setRounds((data ?? []) as OwnerRound[]);
+    if (error) setListError("No pudimos cargar tus documentos. Pulsa Actualizar para volver a intentarlo.");
+    else { setRounds((data ?? []) as OwnerRound[]); setListError(""); }
+    } catch {
+      setListError("No pudimos cargar tus documentos. Comprueba la conexión.");
+    } finally { setListLoading(false); }
   }
   async function openRound(id: string, quiet = false) {
+    if (trackingRequest.current === id) return;
+    trackingRequest.current = id;
+    const sequence = ++trackingSequence.current;
+    try {
     const s = await getSupabase();
     const { data, error } = await s.functions.invoke("get-owner-round", {
       body: { id },
     });
+    if (sequence !== trackingSequence.current) return;
     if (error || !data) {
-      if (!quiet) setNotice("No pudimos cargar el seguimiento del proceso.");
+      setTrackingError(selected?.workflow?.id === id
+        ? "No pudimos actualizar el seguimiento. Los datos mostrados corresponden a la última consulta correcta."
+        : "No pudimos cargar el seguimiento. Pulsa Actualizar para volver a intentarlo.");
     }
     else {
       setSelected(data);
+      setTrackingError("");
       setLastTrackingRefresh(new Date());
       if (!quiet) {
         setFinalConfirmed(false);
         setNotice("");
       }
+    }
+    } catch {
+      if (sequence === trackingSequence.current) setTrackingError("No pudimos actualizar el seguimiento. Comprueba la conexión.");
+    } finally {
+      if (sequence === trackingSequence.current) trackingRequest.current = null;
     }
   }
   async function manageRound(
@@ -1401,18 +1451,16 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
     </div>
   );
   useEffect(() => {
-    void loadRounds();
-  }, []);
+    if (!focusOnly) void loadRounds();
+  }, [focusOnly]);
   useEffect(() => {
     if (!highlightRoundId) return;
-    void loadRounds();
     void openRound(highlightRoundId);
   }, [highlightRoundId]);
   useEffect(() => {
     const workflowId = selected?.workflow?.id;
     if (!focusOnly || !workflowId) return;
-    const timer = window.setInterval(() => { void openRound(workflowId, true); }, 20_000);
-    return () => window.clearInterval(timer);
+    return startPolling(() => openRound(workflowId, true), 20_000);
   }, [focusOnly, selected?.workflow?.id]);
   return (
     <section className="owner-panel" id="mis-documentos">
@@ -1422,12 +1470,13 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
           <h2>{focusOnly ? "Seguimiento" : "Mis documentos"}</h2>
           <p>{focusOnly ? "Consulta el avance y las acciones que requieren tu atención." : "Consulta el estado de cada proceso y gestiona sus firmas."}</p>
         </div>
-        <button className="signout" onClick={() => { void loadRounds(); if (selected?.workflow?.id) void openRound(selected.workflow.id); }}>
+        <button className="signout" onClick={() => { if (!focusOnly) void loadRounds(); const id = selected?.workflow?.id || highlightRoundId; if (id) void openRound(id); }}>
           <Icon name="refresh" size={16} /> Actualizar
         </button>
       </div>
-      {focusOnly && <p className="auto-refresh-note"><span className="live-dot" /> Actualización automática cada 20 segundos{lastTrackingRefresh ? ` · última ${lastTrackingRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}</p>}
-      {!focusOnly && (rounds.length === 0 ? (
+      {focusOnly && <p className="auto-refresh-note"><span className="live-dot" /> Se actualiza cada 20 segundos mientras esta pantalla está visible{lastTrackingRefresh ? ` · última ${lastTrackingRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}</p>}
+      <Notice message={trackingError || listError} tone="error" />
+      {!focusOnly && (listLoading && rounds.length === 0 ? <p className="empty-state" role="status">Cargando tus documentos…</p> : listError && rounds.length === 0 ? null : rounds.length === 0 ? (
         <p className="empty-state">Todavía no has creado ningún proceso.</p>
       ) : (
         <div className="process-groups">
@@ -1671,6 +1720,7 @@ function App() {
   const roundId = match ? expandRoundId(match[1]) : "";
   if (roundId) return <RoundAccess id={roundId} />;
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -1699,11 +1749,23 @@ function App() {
   const [authNoticeTone, setAuthNoticeTone] = useState<"info" | "error" | "success">("info");
   const [workspaceNoticeTone, setWorkspaceNoticeTone] = useState<"info" | "error" | "success">("info");
   const createdResultRef = useRef<HTMLDivElement>(null);
+  const createRequest = useRef(false);
   useEffect(() => {
     let unsubscribe = () => {};
+    let disposed = false;
     getSupabase()
       .then((supabase) => {
-        supabase.auth.getSession().then(({ data }) => setSession(data.session));
+        if (disposed) return;
+        supabase.auth.getSession()
+          .then(({ data, error }) => {
+            if (disposed) return;
+            if (error) throw error;
+            setSession(data.session);
+          })
+          .catch(() => {
+            if (!disposed) { setAuthNoticeTone("error"); setNotice("No pudimos recuperar tu sesión. Inténtalo de nuevo."); }
+          })
+          .finally(() => { if (!disposed) setSessionLoading(false); });
         const { data } = supabase.auth.onAuthStateChange((event, next) => {
           setSession(next);
           if (event === "PASSWORD_RECOVERY") setRecovering(true);
@@ -1713,12 +1775,14 @@ function App() {
       .catch(() =>
         {
           setWorkspaceNoticeTone("error");
+          setAuthNoticeTone("error");
+          setSessionLoading(false);
           setNotice(
             "No pudimos abrir tu espacio. Recarga la página e inténtalo de nuevo.",
           );
         },
       );
-    return () => unsubscribe();
+    return () => { disposed = true; unsubscribe(); };
   }, []);
   useEffect(() => {
     if (!createdLink || creationStage !== "share") return;
@@ -1729,6 +1793,7 @@ function App() {
   }, [createdLink, creationStage]);
   function showCreatedProcess() {
     setCreationStage("track");
+    setNotice("");
     window.setTimeout(() => {
       window.document.getElementById("mis-documentos")?.scrollIntoView({
         behavior: "smooth",
@@ -1877,7 +1942,7 @@ function App() {
     setBusy(false);
   }
   async function createRound() {
-    if (!session) return;
+    if (!session || createRequest.current) return;
     setWorkspaceNoticeTone("error");
     if (!title.trim() || !document)
       return setNotice("Añade un nombre y el PDF para continuar.");
@@ -1886,6 +1951,7 @@ function App() {
     const expected = Number(expectedSignatures);
     if (!indefiniteSigners && (!Number.isInteger(expected) || expected < 1 || expected > 20))
       return setNotice("Indica entre 1 y 20 personas, o marca que la cantidad es indefinida.");
+    createRequest.current = true;
     setBusy(true);
     setCreatedLink("");
     setCreatedRoundId("");
@@ -1897,11 +1963,12 @@ function App() {
     form.set("groupKey", protectWithKey ? key : "");
     form.set("expectedSignatures", indefiniteSigners ? "" : String(expected));
     form.set("document", document);
+    try {
     const supabase = await getSupabase();
     const { data, error } = await supabase.functions.invoke("create-round", {
       body: form,
     });
-    if (error) {
+    if (error || !data?.id) {
       setWorkspaceNoticeTone("error");
       setNotice(
         await functionError(
@@ -1918,8 +1985,16 @@ function App() {
       setCreatedLink(`${window.location.origin}${roundPath(data.id)}`);
       setCreationStage("share");
     }
-    setBusy(false);
+    } catch {
+      setWorkspaceNoticeTone("error");
+      setNotice("No pudimos confirmar la creación. Revisa Mis documentos antes de intentarlo de nuevo.");
+    } finally {
+      createRequest.current = false;
+      setBusy(false);
+    }
   }
+
+  if (sessionLoading) return <main className="session-loading" role="status"><Brand /><div><span className="loading-spinner" aria-hidden="true" /><p>Abriendo tu espacio…</p></div></main>;
 
   if (recovering)
     return (
@@ -2170,6 +2245,7 @@ function App() {
               </>
             )}
           </button>
+          <Notice message={notice} tone={workspaceNoticeTone} />
         </div>
         <aside className="process-disclaimer">
           <Icon name="shield" size={17} />
@@ -2227,24 +2303,19 @@ function App() {
           </div>
         )}
         {creationStage === "track" && createdLink && (
-          <div className="tracking-handoff" role="status">
+          <div className="tracking-handoff">
             <ol className="creation-progress" aria-label="Progreso del proceso">
               <li className="complete"><button type="button" onClick={startNewProcess}><span><Icon name="check" size={13} /></span><small>Documento</small></button></li>
               <li className="complete"><button type="button" onClick={() => setCreationStage("share")}><span><Icon name="check" size={13} /></span><small>Compartir</small></button></li>
               <li className="current"><span>3</span><small>Seguimiento</small></li>
             </ol>
-            <div>
-              <span className="section-kicker">Proceso activo</span>
-              <h2>{createdRoundTitle}</h2>
-              <p>Consulta el estado de las invitaciones, la cola, las firmas y las versiones de este proceso.</p>
-            </div>
             <div className="tracking-handoff-actions">
+              <span>Proceso en seguimiento</span>
               <button type="button" className="signout" onClick={startNewProcess}>Crear otro proceso</button>
-              <button type="button" className="primary" onClick={showCreatedProcess}>Ver proceso activo <Icon name="arrow" size={16} /></button>
             </div>
           </div>
         )}
-        <Notice message={notice} tone={workspaceNoticeTone} />
+        {creationStage !== "create" && <Notice message={notice} tone={workspaceNoticeTone} />}
       </section>
       {creationStage !== "share" && <OwnerPanel highlightRoundId={creationStage === "track" ? createdRoundId : ""} focusOnly={creationStage === "track"} onBackToShare={() => { setCreationStage("share"); window.setTimeout(() => createdResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 30); }} onShowArchive={() => { setCreationStage("create"); window.setTimeout(() => window.document.getElementById("mis-documentos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30); }} />}
     </main>

@@ -32,6 +32,8 @@ jobs:
       - run: npm audit --audit-level=high
       - run: node scripts/check-secrets.mjs
       - run: npm test
+      - name: Check real PDF parsing and compressed active content
+        run: npx --yes --package deno@2.9.6 deno test --no-config --no-lock --node-modules-dir=auto scripts/test-pdf-validation.ts
       - run: node scripts/test-security-database.mjs firmador
         env:
           SECURITY_TEST_CONTAINER: ${{ job.services.postgres.id }}

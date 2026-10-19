@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase } from "../lib/supabase";
 import "./admin.css";
@@ -254,7 +254,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: s
   return <article className={`admin-metric ${tone || ""}`}><span>{label}</span><strong>{value}</strong></article>;
 }
 
-function Overview({ dashboard, refresh, act }: { dashboard: Dashboard; refresh: () => void; act: (body: Record<string, unknown>, success: string) => Promise<void> }) {
+function Overview({ dashboard, refresh, act }: { dashboard: Dashboard; refresh: () => void; act: (body: Record<string, unknown>, success: string) => Promise<boolean> }) {
   const metrics = dashboard.metrics;
   return <>
     <div className="admin-section-title"><div><span className="admin-kicker">Situación actual</span><h2>Resumen operativo</h2></div><button className="admin-secondary" onClick={refresh}>Actualizar</button></div>
@@ -278,7 +278,7 @@ function Overview({ dashboard, refresh, act }: { dashboard: Dashboard; refresh: 
   </>;
 }
 
-function Accounts({ users, load, act }: { users: AdminUser[]; load: () => void; act: (body: Record<string, unknown>, success: string) => Promise<void> }) {
+function Accounts({ users, load, act }: { users: AdminUser[]; load: () => void; act: (body: Record<string, unknown>, success: string) => Promise<boolean> }) {
   async function account(user: AdminUser, action: "disable" | "enable" | "delete") {
     const label = action === "disable" ? "bloquear" : action === "enable" ? "reactivar" : "eliminar definitivamente";
     if (!window.confirm(`¿Quieres ${label} ${user.email}?`)) return;
@@ -300,7 +300,7 @@ function Accounts({ users, load, act }: { users: AdminUser[]; load: () => void; 
   </>;
 }
 
-function Workflows({ workflows, load, act }: { workflows: AdminWorkflow[]; load: () => void; act: (body: Record<string, unknown>, success: string) => Promise<void> }) {
+function Workflows({ workflows, load, act }: { workflows: AdminWorkflow[]; load: () => void; act: (body: Record<string, unknown>, success: string) => Promise<boolean> }) {
   async function manage(workflow: AdminWorkflow, action: string) {
     const names: Record<string, string> = { pause: "pausar", resume: "reanudar", release_turn: "liberar el turno", cancel: "cancelar", purge: "purgar definitivamente" };
     if (!window.confirm(`¿Quieres ${names[action]} “${workflow.title}”?`)) return;
@@ -319,21 +319,45 @@ function Workflows({ workflows, load, act }: { workflows: AdminWorkflow[]; load:
   </>;
 }
 
-function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard; setDashboard: (value: Dashboard) => void; act: (body: Record<string, unknown>, success: string) => Promise<void> }) {
+function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard; setDashboard: (value: Dashboard) => void; act: (body: Record<string, unknown>, success: string) => Promise<boolean> }) {
   const [settings, setSettings] = useState({ ...dashboard.settings });
   const [editing, setEditing] = useState<EmailTemplate | null>(null);
+  const [editorError, setEditorError] = useState("");
+  const modalRef = useRef<HTMLDivElement>(null);
+  const editorOpen = editing !== null;
+  useEffect(() => {
+    if (!editorOpen || !modalRef.current) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const modal = modalRef.current;
+    const controls = () => Array.from(modal.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled)'));
+    modal.querySelector<HTMLInputElement>('input')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setEditing(null); }
+      if (event.key !== 'Tab') return;
+      const items = controls();
+      const target = event.shiftKey ? items.at(-1) : items[0];
+      if (!modal.contains(document.activeElement) || (!event.shiftKey && document.activeElement === items.at(-1)) || (event.shiftKey && document.activeElement === items[0])) {
+        event.preventDefault(); target?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); previous?.focus(); };
+  }, [editorOpen]);
   const toggles = [
     ["email_master_enabled", "Envío general de correos"], ["email_invitations_enabled", "Invitaciones"], ["email_reminders_enabled", "Recordatorios a 1 y 24 horas"], ["email_completion_enabled", "Objetivo de firmas alcanzado"], ["automatic_cleanup_enabled", "Procesamiento de purgas"], ["maintenance_mode", "Modo mantenimiento"],
   ];
   async function saveSettings() {
     const reason = window.prompt("Motivo del cambio de configuración:"); if (!reason) return;
-    await act({ action: "update_settings", ...settings, reason }, "Configuración guardada.");
-    setDashboard({ ...dashboard, settings });
+    if (await act({ action: "update_settings", ...settings, reason }, "Configuración guardada.")) setDashboard({ ...dashboard, settings });
   }
   async function saveTemplate() {
     if (!editing) return;
     const reason = window.prompt("Motivo del cambio de plantilla:"); if (!reason) return;
-    await act({ action: "update_template", ...editing, reason }, "Plantilla guardada.");
+    setEditorError("");
+    if (!await act({ action: "update_template", ...editing, reason }, "Plantilla guardada.")) {
+      setEditorError("No pudimos guardar los cambios. Tu texto sigue aquí; vuelve a intentarlo.");
+      return;
+    }
     setDashboard({ ...dashboard, templates: dashboard.templates.map((item) => item.template_key === editing.template_key ? editing : item) });
     setEditing(null);
   }
@@ -341,8 +365,8 @@ function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard
     <div className="admin-section-title"><div><span className="admin-kicker">Comunicaciones</span><h2>Correos, plantillas y servicio</h2></div><button onClick={saveSettings}>Guardar configuración</button></div>
     <section className="admin-card admin-toggles">{toggles.map(([key, label]) => <label key={key}><span><strong>{label}</strong><small>{key === "maintenance_mode" ? "Detiene temporalmente nuevas operaciones públicas." : "El cambio queda registrado en auditoría."}</small></span><input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => setSettings({ ...settings, [key]: event.target.checked })} /></label>)}</section>
     <h3 className="admin-subheading">Plantillas de correo</h3>
-    <div className="admin-template-list">{dashboard.templates.map((template) => <article className="admin-card" key={template.template_key}><div><span className={`admin-status ${template.enabled ? "active" : "paused"}`}>{template.enabled ? "Activa" : "Apagada"}</span><h3>{template.label}</h3><p>{template.subject_template}</p><small>Actualizada {date(template.updated_at)}</small></div><button className="admin-secondary" onClick={() => setEditing({ ...template })}>Editar</button></article>)}</div>
-    {editing && <div className="admin-modal" role="dialog" aria-modal="true" aria-label={`Editar ${editing.label}`}><section><div className="admin-section-title"><h2>{editing.label}</h2><button className="admin-secondary" onClick={() => setEditing(null)}>Cerrar</button></div><label>Asunto<input value={editing.subject_template} maxLength={160} onChange={(event) => setEditing({ ...editing, subject_template: event.target.value })} /></label><label>Mensaje<textarea value={editing.body_template} maxLength={3000} rows={9} onChange={(event) => setEditing({ ...editing, body_template: event.target.value })} /></label><p className="admin-help">Variables disponibles: <code>{"{{name}}"}</code>, <code>{"{{title}}"}</code> y <code>{"{{link}}"}</code>.</p><label className="admin-check"><input type="checkbox" checked={editing.enabled} onChange={(event) => setEditing({ ...editing, enabled: event.target.checked })} /> Plantilla activa</label><button onClick={saveTemplate}>Guardar plantilla</button></section></div>}
+    <div className="admin-template-list">{dashboard.templates.map((template) => <article className="admin-card" key={template.template_key}><div><span className={`admin-status ${template.enabled ? "active" : "paused"}`}>{template.enabled ? "Activa" : "Apagada"}</span><h3>{template.label}</h3><p>{template.subject_template}</p><small>Actualizada {date(template.updated_at)}</small></div><button className="admin-secondary" onClick={() => { setEditorError(""); setEditing({ ...template }); }}>Editar</button></article>)}</div>
+    {editing && <div ref={modalRef} className="admin-modal" role="dialog" aria-modal="true" aria-label={`Editar ${editing.label}`}><section><div className="admin-section-title"><h2>{editing.label}</h2><button className="admin-secondary" onClick={() => setEditing(null)}>Cerrar</button></div><label>Asunto<input value={editing.subject_template} maxLength={160} onChange={(event) => setEditing({ ...editing, subject_template: event.target.value })} /></label><label>Mensaje<textarea value={editing.body_template} maxLength={3000} rows={9} onChange={(event) => setEditing({ ...editing, body_template: event.target.value })} /></label><p className="admin-help">Variables disponibles: <code>{"{{name}}"}</code>, <code>{"{{title}}"}</code> y <code>{"{{link}}"}</code>.</p><label className="admin-check"><input type="checkbox" checked={editing.enabled} onChange={(event) => setEditing({ ...editing, enabled: event.target.checked })} /> Plantilla activa</label><button onClick={saveTemplate}>Guardar plantilla</button>{editorError && <p className="admin-alert error" role="alert">{editorError}</p>}</section></div>}
   </>;
 }
 
@@ -362,7 +386,7 @@ function Console({ session }: { session: Session }) {
   async function loadDashboard() { const result = await run(() => invoke<Dashboard>({ action: "dashboard" })); if (result) setDashboard(result); }
   async function loadUsers() { const result = await run(() => invoke<{ users: AdminUser[] }>({ action: "users" })); if (result) setUsers(result.users); }
   async function loadWorkflows() { const result = await run(() => invoke<{ workflows: AdminWorkflow[] }>({ action: "workflows" })); if (result) setWorkflows(result.workflows); }
-  async function act(body: Record<string, unknown>, success: string) { const result = await run(() => invoke(body)); if (result) { setNotice(success); await loadDashboard(); } }
+  async function act(body: Record<string, unknown>, success: string) { const result = await run(() => invoke(body)); if (!result) return false; setNotice(success); await loadDashboard(); return true; }
   useEffect(() => { void loadDashboard(); }, []);
   useEffect(() => { if (tab === "accounts") void loadUsers(); if (tab === "workflows") void loadWorkflows(); }, [tab]);
   const content = useMemo(() => {

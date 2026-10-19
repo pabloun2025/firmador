@@ -1,4 +1,4 @@
-import { PDFDocument } from "npm:pdf-lib@1.17.1";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFObject, PDFStream } from "npm:pdf-lib@1.17.1";
 
 export type PdfProfile = {
   pageCount: number;
@@ -6,6 +6,28 @@ export type PdfProfile = {
 };
 
 const dangerousMarkers = ["/JavaScript", "/JS", "/Launch", "/EmbeddedFiles"];
+const dangerousNames = new Set(dangerousMarkers.map(marker => marker.slice(1)));
+const unsafePdfMessage = "El PDF contiene contenido activo o archivos adjuntos y no puede incorporarse.";
+
+function rejectActiveObjects(pdf: PDFDocument) {
+  // pdf-lib expands compressed object streams when loading. Inspect the parsed
+  // names too, so compression and escaped PDF names cannot bypass the raw scan.
+  // Never save/serialize the document: signed bytes must remain unchanged.
+  const pending: PDFObject[] = pdf.context.enumerateIndirectObjects().map(([, object]) => object);
+  const seen = new WeakSet<PDFObject>();
+  while (pending.length) {
+    const object = pending.pop()!;
+    if (seen.has(object)) continue;
+    seen.add(object);
+    if (object instanceof PDFName && dangerousNames.has(object.decodeText())) throw new Error(unsafePdfMessage);
+    if (object instanceof PDFDict) {
+      for (const [key, value] of object.entries()) pending.push(key, value);
+    } else if (object instanceof PDFArray) {
+      for (const value of object.asArray()) pending.push(value);
+    }
+    else if (object instanceof PDFStream) pending.push(object.dict);
+  }
+}
 
 function containsAscii(bytes: Uint8Array, value: string) {
   const needle = new TextEncoder().encode(value);
@@ -24,7 +46,7 @@ export async function inspectPdf(bytes: Uint8Array): Promise<PdfProfile> {
   }
   for (const marker of dangerousMarkers) {
     if (containsAscii(bytes, marker)) {
-      throw new Error("El PDF contiene contenido activo o archivos adjuntos y no puede incorporarse.");
+      throw new Error(unsafePdfMessage);
     }
   }
   try {
@@ -32,6 +54,7 @@ export async function inspectPdf(bytes: Uint8Array): Promise<PdfProfile> {
       ignoreEncryption: false,
       updateMetadata: false,
     });
+    rejectActiveObjects(pdf);
     const pages = pdf.getPages();
     if (!pages.length || pages.length > 500) throw new Error("Cantidad de páginas no válida.");
     return {
@@ -42,7 +65,7 @@ export async function inspectPdf(bytes: Uint8Array): Promise<PdfProfile> {
       }),
     };
   } catch (error) {
-    if (error instanceof Error && error.message === "Cantidad de páginas no válida.") throw error;
+    if (error instanceof Error && (error.message === "Cantidad de páginas no válida." || error.message === unsafePdfMessage)) throw error;
     throw new Error("El PDF está cifrado, dañado o no se puede leer.");
   }
 }

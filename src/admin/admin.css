@@ -5,7 +5,7 @@ body:has(.admin-shell), body:has(.admin-login), body:has(.admin-loading-page) { 
 .admin-brand img { width:36px; height:36px; }
 .admin-brand div { display:grid; }
 .admin-brand strong { font-size:19px; letter-spacing:-.5px; }
-.admin-brand small { color:#6d7c75; font-size:10px; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+.admin-brand small { color:#52665c; font-size:10px; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
 .admin-kicker { color:#2a715d; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .admin-login { max-width:1120px; min-height:100vh; margin:auto; padding:36px; }
 .admin-login > section { width:min(100%,440px); margin:12vh auto 0; padding:36px; border:1px solid var(--admin-line); border-radius:22px; background:#fff; box-shadow:0 24px 70px #123d3312; }
@@ -84,6 +84,9 @@ button.danger, .admin-row-actions button.danger, .admin-workflows footer button.
 .admin-audit time, .admin-audit small { color:#79867f; font-size:10px; }
 .admin-loading, .admin-loading-page { display:grid; place-items:center; min-height:50vh; color:#687970; }
 .admin-loading-page { align-content:center; gap:24px; min-height:100vh; }
+.admin-metric > span, .admin-table-wrap th, .admin-table-wrap td small,
+.admin-workflows header code, .admin-toggles small, .admin-template-list small,
+.admin-audit time, .admin-audit small { color:#52665c; }
 @media (max-width:1000px) { .admin-metrics { grid-template-columns:repeat(2,1fr); } .admin-template-list { grid-template-columns:1fr; } }
 @media (max-width:760px) { .admin-top { padding:16px 18px; } .admin-top > div:last-child span { display:none; } .admin-layout { display:block; } .admin-layout > nav { position:static; display:flex; height:auto; overflow:auto; padding:12px 16px; border-right:0; border-bottom:1px solid var(--admin-line); } .admin-layout > nav button { flex:0 0 auto; } .admin-content { padding:26px 16px 60px; } .admin-metrics { grid-template-columns:1fr 1fr; } .admin-toggles { grid-template-columns:1fr; } .admin-login { padding:20px; } .admin-login > section { margin-top:8vh; padding:25px; } .admin-section-title { align-items:flex-start; } }
 @media (max-width:480px) { .admin-metrics { grid-template-columns:1fr; } .admin-section-title { display:grid; } .admin-health, .admin-workflows header { align-items:flex-start; display:grid; } }

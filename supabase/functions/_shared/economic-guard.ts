@@ -5,7 +5,7 @@ export type BudgetClient = {
   auth: { getUser: (token: string) => Promise<{ data: { user: { id: string } | null }; error: unknown }> };
 };
 type ClientFactory = (url: string, key: string) => BudgetClient;
-type Handler = (request: Request) => Response | Promise<Response>;
+type Handler = (request: Request, context: { ownerId?: string }) => Response | Promise<Response>;
 type Runtime = { env: { get: (name: string) => string | undefined } };
 const env = (name: string) => (globalThis as unknown as { Deno: Runtime }).Deno.env.get(name);
 const day = 86_400;
@@ -51,7 +51,7 @@ export async function boundedBody(request: Request, maxBytes: number): Promise<R
 }
 const ownerEndpoints = new Set(['create-round', 'create-directed', 'send-round-invitations', 'get-owner-round', 'owner-round-action', 'owner-download-version', 'superadmin-console', 'superadmin-recovery']);
 const uploadEndpoints = new Set(['create-round', 'create-directed', 'submit-signed-version']);
-export function protectEndpoint(endpoint: string, createClient: ClientFactory, handler: Handler): Handler {
+export function protectEndpoint(endpoint: string, createClient: ClientFactory, handler: Handler): (request: Request) => Promise<Response> {
   return async request => {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Cache-Control': 'no-store' };
     if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -75,6 +75,7 @@ export function protectEndpoint(endpoint: string, createClient: ClientFactory, h
       const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
       const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip)));
       let actor = `public-slot-${((bytes[0] << 8) | bytes[1]) % 1024}`;
+      let ownerId: string | undefined;
       await reserveBudget(client, 'requests', [
         { scope: 'shared:requests', period: day, amount: 1, policy: 'requests_daily', limit: 50_000 },
         { scope: `endpoint:${endpoint}`, period: 3600, amount: 1, policy: 'endpoint_hourly', limit: 6_000 },
@@ -84,6 +85,7 @@ export function protectEndpoint(endpoint: string, createClient: ClientFactory, h
         const { data, error } = await client.auth.getUser(token!);
         if (error || !data.user) throw new BudgetError(401, 'AUTH_REQUIRED', 'La sesión no es válida.');
         actor = data.user.id;
+        ownerId = data.user.id;
         await reserveBudget(client, 'requests', [
           { scope: `actor:${actor}`, period: 3600, amount: 1, policy: 'actor_hourly', limit: 1_200 },
         ]);
@@ -96,7 +98,7 @@ export function protectEndpoint(endpoint: string, createClient: ClientFactory, h
         { scope: `upload:${actor}`, period: 3600, amount: 1, policy: 'upload_actor_hourly', limit: 60 },
       ]);
       const bounded = await boundedBody(request, uploadEndpoints.has(endpoint) ? 11 * 1024 * 1024 : 64 * 1024);
-      const response = await handler(bounded);
+      const response = await handler(bounded, { ownerId });
       response.headers.set('Cache-Control', 'no-store');
       return response;
     } catch (error) {
