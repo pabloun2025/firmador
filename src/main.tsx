@@ -1197,6 +1197,8 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
   const [selected, setSelected] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const [finalConfirmed, setFinalConfirmed] = useState(false);
+  const [reviewedVersionId, setReviewedVersionId] = useState("");
+  const [actionPending, setActionPending] = useState(false);
   const [lastTrackingRefresh, setLastTrackingRefresh] = useState<Date | null>(null);
   const [trackingError, setTrackingError] = useState("");
   const [listLoading, setListLoading] = useState(true);
@@ -1261,8 +1263,8 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
     workflowId?: string,
   ) {
     const roundId = workflowId ?? selected?.workflow.id;
-    if (!roundId) return;
-    if (action === "finalize" && !finalConfirmed) {
+    if (!roundId || actionPending) return;
+    if (action === "finalize" && (!finalConfirmed || reviewedVersionId !== versionId)) {
       setNotice(
         "Revisa la versión descargada y marca la confirmación antes de aceptarla como final.",
       );
@@ -1275,10 +1277,12 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
         : action === "rollback"
           ? "Volverás a esta versión. Las posteriores se retirarán y se programará su eliminación; también se liberará el turno activo. ¿Continuar?"
           : action === "finalize"
-            ? "Aceptarás esta versión como final y el proceso se cerrará. Las anteriores se conservarán hasta 48 horas y la final durante 5 días. ¿Continuar?"
+            ? `${selected?.activeTurn ? "Hay una persona firmando. Su turno se cerrará. " : ""}${selected?.workflow.expected_signature_count && selected.workflow.signature_count < selected.workflow.expected_signature_count ? "Todavía faltan firmas previstas. " : ""}Aceptarás esta versión como final y el proceso se cerrará. Las anteriores se conservarán hasta 48 horas y la final durante 5 días. ¿Continuar?`
             : "";
     if ((action === "purge" || irreversible) && !window.confirm(warning))
       return;
+    setActionPending(true);
+    try {
     const s = await getSupabase();
     const { data, error } = await s.functions.invoke("owner-round-action", {
       body: {
@@ -1319,6 +1323,9 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
         share?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});
       }, 50);
     }
+    } catch {
+      setNotice("No pudimos confirmar el cambio. Actualiza el seguimiento para comprobar el estado antes de intentarlo de nuevo.");
+    } finally { setActionPending(false); }
   }
   async function downloadVersion(versionId?: string) {
     if (!selected) return;
@@ -1327,7 +1334,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
       body: { id: selected.workflow.id, versionId },
     });
     if (error || !data?.url) setNotice("No pudimos preparar la descarga.");
-    else window.open(data.url, "_blank", "noopener");
+    else { setReviewedVersionId(versionId ?? selected.workflow.current_version_id); setFinalConfirmed(false); window.open(data.url, "_blank", "noopener"); }
   }
   const statusText = (status: string) =>
     status === "active"
@@ -1344,17 +1351,25 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
   );
   const previousVersions = selected?.versions.filter(
     (version: any) => version.id !== selected.workflow.current_version_id,
-  ) ?? [];
+  ).sort((a: any, b: any) => b.sequence - a.sequence) ?? [];
+  useEffect(() => { setFinalConfirmed(false); setReviewedVersionId(""); }, [selected?.workflow?.id, currentVersion?.id]);
+  const goalReached = selected?.workflow.expected_signature_count != null && selected.workflow.signature_count >= selected.workflow.expected_signature_count;
+  const canClose = ["active", "paused_error"].includes(selected?.workflow.status);
   const activeRounds = rounds.filter((round) =>
     round.status === "active" || round.status === "paused_error",
   );
   const previousRounds = rounds.filter((round) =>
     round.status !== "active" && round.status !== "paused_error",
   );
-  const invitationStatus = (invitation: any) => invitation.status === "completed"
-    ? "Firma completada" : invitation.status === "opened"
-      ? (selected?.activeTurn?.holder_email === invitation.email ? "Firmando ahora" : selected?.queue?.some((item: any) => item.email === invitation.email) ? "En la cola" : "Enlace abierto")
-      : invitation.status === "cancelled" ? "Caducada o cerrada" : invitation.email_error ? "Envío con incidencia" : "Invitación enviada";
+  const invitationStatus = (invitation: any) => {
+    if (invitation.status === "completed") return "Firma completada";
+    if (invitation.status === "cancelled" || Date.parse(invitation.expires_at) <= Date.now()) return "Caducada o cerrada";
+    const email = String(invitation.email).toLowerCase();
+    if (selected?.activeTurn?.holder_email?.toLowerCase() === email) return "Firmando ahora";
+    if (selected?.queue?.some((item: any) => item.email?.toLowerCase() === email)) return "En espera";
+    if (invitation.opened_at || invitation.status === "opened") return "Enlace abierto";
+    return invitation.email_error ? "Envío con incidencia" : invitation.email_sent_at ? "Invitación enviada" : "Envío pendiente";
+  };
   const reservedInvitationCount = selected ? activeInvitationEmails(selected.invitations ?? []).size : 0;
   const exceedsSignerCapacity = selected?.workflow.expected_signature_count != null
     && selected.workflow.signature_count + reservedInvitationCount > selected.workflow.expected_signature_count;
@@ -1433,66 +1448,78 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
             <div>
               <span className={`status-badge status-${selected.workflow.status}`}>{statusText(selected.workflow.status)}</span>
               <h3>{selected.workflow.title}</h3>
-              <p>{selected.workflow.expected_signature_count ? `${selected.workflow.signature_count} de ${selected.workflow.expected_signature_count} firmas previstas` : `${selected.workflow.signature_count} ${selected.workflow.signature_count === 1 ? "firma incorporada" : "firmas incorporadas"} · cantidad abierta`}</p>
-            </div>
-            <div className="owner-actions">
-              {selected.workflow.status === "active" ? (
-                <button
-                  className="signout"
-                  onClick={() => manageRound("pause")}
-                >
-                  Detener proceso
-                </button>
-              ) : selected.workflow.status === "paused_error" ? (
-                <button
-                  className="signout"
-                  onClick={() => manageRound("resume")}
-                >
-                  Reanudar proceso
-                </button>
-              ) : null}
-              {selected.activeTurn && (
-                <button
-                  className="signout"
-                  onClick={() => manageRound("release_turn")}
-                >
-                  Liberar turno actual
-                </button>
-              )}
-              {selected.queue.length > 0 && (
-                <button
-                  className="signout"
-                  onClick={() => manageRound("skip_next")}
-                >
-                  Retirar primera espera
-                </button>
-              )}
-              <button className="signout" onClick={() => downloadVersion()}>
-                <Icon name="download" size={16} /> Descargar PDF actual
-              </button>
-              <button
-                className="danger-button"
-                onClick={() => manageRound("purge")}
-              >
-                <Icon name="trash" size={16} /> Eliminar proceso
-              </button>
+              <p className="signature-total">{selected.workflow.expected_signature_count ? `${selected.workflow.signature_count} de ${selected.workflow.expected_signature_count} firmas recibidas` : `${selected.workflow.signature_count} ${selected.workflow.signature_count === 1 ? "firma recibida" : "firmas recibidas"} · cantidad abierta`}</p>
+              {selected.workflow.expected_signature_count > 0 && <progress className="signature-progress" aria-label="Firmas recibidas" max={selected.workflow.expected_signature_count} value={selected.workflow.signature_count} />}
             </div>
           </div>
+          {focusOnly && <section className="tracking-guidance">
+            <span className="section-kicker">Próximo paso</span>
+            <h4>{selected.workflow.status === "completed" ? "Descarga y conserva el documento final" : selected.workflow.status === "paused_error" ? "Resuelve la incidencia para continuar" : goalReached ? "Todas las firmas previstas se han recibido" : selected.activeTurn ? "Una persona está firmando ahora" : selected.queue.length ? "La cola avanza automáticamente" : reservedInvitationCount ? "Esperando las firmas pendientes" : "Comparte el enlace para recibir firmas"}</h4>
+            <p>{selected.workflow.status === "completed" ? `La copia final estará disponible hasta ${selected.workflow.final_file_delete_at ? new Date(selected.workflow.final_file_delete_at).toLocaleString() : "cinco días después del cierre"}.` : selected.workflow.status === "paused_error" ? "Revisa las incidencias y reanuda desde Opciones del proceso cuando esté resuelto." : goalReached ? "Descarga el PDF más reciente, revisa las firmas y acéptalo como final cuando estés conforme." : selected.activeTurn ? "No necesitas hacer nada. Si el turno vence, quedará disponible para la siguiente persona." : selected.queue.length ? "Puedes revisar abajo quién espera y actuar solo si alguien informa una incidencia." : reservedInvitationCount ? "Las personas invitadas todavía pueden incorporarse. Consulta sus estados abajo." : "Vuelve a Compartir para copiar el enlace o enviar invitaciones."}</p>
+          </section>}
+          <section className="tracking-section version-section" aria-label="PDF actual">
+            <header className="current-pdf-heading"><span className="section-kicker">{selected.workflow.status === "completed" ? "PDF final" : "PDF más reciente"}</span><h4>{documentFilename(selected.workflow.title)}</h4><span>{currentVersion?.sequence === 0 ? "Documento inicial · sin firmas recibidas" : `Versión ${currentVersion?.sequence ?? 0}`}</span></header>
+            <div className="section-action-row"><p>Descarga esta copia para revisar las firmas recibidas.</p><button className="primary" disabled={!currentVersion} onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar PDF actual</button></div>
+            {currentVersion && <article className="current-version-card">
+              <div className="version-summary">
+                <strong>
+                  Versión {currentVersion.sequence}
+                </strong>
+                <span>
+                  {Math.ceil(currentVersion.byte_size / 1024)} KB · {new Date(currentVersion.created_at).toLocaleString()}
+                </span>
+                <span className="version-author">
+                  Cargada por <strong>{currentVersion.submitted_by_name || (currentVersion.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>
+                  {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
+                </span>
+              </div>
+              {canClose && (
+                <div className="final-approval">
+                  <div className="final-approval-title">
+                    <span><Icon name="check" size={17} /></span>
+                    <div>
+                      <strong>Cerrar el proceso con esta versión</strong>
+                      <p>Descarga y revisa el PDF antes de aceptarlo. Después no podrán añadirse más firmas.</p>
+                    </div>
+                  </div>
+                  {(selected.activeTurn || (selected.workflow.expected_signature_count != null && !goalReached)) && <p className="closure-warning">{selected.activeTurn ? "Hay una persona firmando. Si cierras ahora, su turno terminará. " : ""}{selected.workflow.expected_signature_count != null && !goalReached ? `Faltan ${selected.workflow.expected_signature_count - selected.workflow.signature_count} firmas previstas. Solo cierra si has decidido no recibirlas.` : ""}</p>}
+                  {reviewedVersionId !== currentVersion.id && <p>Primero descarga el PDF actual. Después confirma que lo has revisado.</p>}
+                  <label className="final-confirm">
+                    <input
+                      type="checkbox"
+                      disabled={reviewedVersionId !== currentVersion.id} checked={finalConfirmed}
+                      onChange={(event) => setFinalConfirmed(event.target.checked)}
+                    />
+                    <span><strong>He revisado el PDF</strong><small>Confirmo que esta será la versión final del documento.</small></span>
+                  </label>
+                  <button
+                    className="primary final-button"
+                    disabled={actionPending || !finalConfirmed || reviewedVersionId !== currentVersion.id}
+                    onClick={() => manageRound("finalize", currentVersion.id)}
+                  >
+                    {actionPending ? "Guardando cambios…" : "Aceptar PDF final y cerrar firmas"}
+                  </button>
+                </div>
+              )}
+            </article>}
+            {currentVersion?.delete_after && <p className="pdf-expiry">Disponible hasta {new Date(currentVersion.delete_after).toLocaleString()}.</p>}
+            <aside className="retention-note">
+              <Icon name="clock" size={18} />
+              <div>
+                <strong>Conservación y plazos</strong>
+                <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a las 48 horas o al completar la firma. Cada versión sustituida permanece disponible para ti hasta 48 horas; al cerrar el proceso, el PDF final se conserva durante 5 días.</p>
+              </div>
+            </aside>
+            <Notice message={notice} />
+          </section>
           {selected.workflow.status === "completed" && <FinalShareCard workflowId={selected.workflow.id} />}
           <dl>
-            <div>
-              <dt>Versión vigente</dt>
-              <dd>
-                Versión{" "}
-                {currentVersion?.sequence ?? 0}
-              </dd>
-            </div>
             <div>
               <dt>Turno actual</dt>
               <dd>
                 {selected.activeTurn
                   ? `${selected.activeTurn.holder_name}${selected.activeTurn.holder_email ? ` · ${selected.activeTurn.holder_email}` : ""} · hasta ${new Date(selected.activeTurn.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                  : "Sin turno activo · disponible"}
+                  : selected.workflow.status === "completed" ? "Firmas cerradas" : "Sin turno activo · disponible"}
               </dd>
             </div>
             <div>
@@ -1504,17 +1531,12 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               </dd>
             </div>
           </dl>
-          {focusOnly && <section className="tracking-guidance">
-            <span className="section-kicker">Próximo paso</span>
-            <h4>{selected.workflow.status === "completed" ? "Descarga y conserva el documento final" : selected.activeTurn ? "Una persona está firmando ahora" : selected.queue.length ? "La cola avanza automáticamente" : "Comparte el enlace para recibir firmas"}</h4>
-            <p>{selected.workflow.status === "completed" ? `La copia final estará disponible hasta ${selected.workflow.final_file_delete_at ? new Date(selected.workflow.final_file_delete_at).toLocaleString() : "cinco días después del cierre"}.` : selected.activeTurn ? "No necesitas hacer nada. Si el turno vence, quedará disponible para la siguiente persona." : selected.queue.length ? "Puedes revisar abajo quién espera y actuar solo si alguien informa una incidencia." : "Vuelve a Compartir para copiar el enlace o enviar invitaciones."}</p>
-          </section>}
-          {focusOnly && selected.invitations?.length > 0 && <details className="tracking-section invitation-statuses" open={reservedInvitationCount > 0 && !selected.activeTurn && !selected.queue.length}>
+          {focusOnly && selected.invitations?.length > 0 && <details className="tracking-section invitation-statuses">
             <summary><span><span className="section-kicker">Invitaciones</span><strong>Estado de los participantes</strong></span><span>{selected.invitations.length}</span><Icon name="chevron" size={17} /></summary>
             {exceedsSignerCapacity && <p className="capacity-warning"><strong>Hay más invitaciones que plazas de firma.</strong> Este proceso se creó antes de aplicar el límite. Solo podrán completar la firma las primeras personas que cubran las {selected.workflow.expected_signature_count} plazas.</p>}
             <ul>{selected.invitations.map((invitation: any) => <li key={invitation.id}><span><strong>{invitation.holder_name}</strong><small>{invitation.email}</small></span><span className={`invite-state invite-${invitation.status}`}>{invitationStatus(invitation)}</span></li>)}</ul>
           </details>}
-          <details className="tracking-section signature-queue" open={Boolean(selected.activeTurn || selected.queue.length)}>
+          <details className="tracking-section signature-queue">
             <summary><span><span className="section-kicker">Orden de acceso</span><strong>Cola de firmas</strong></span><span>{selected.workflow.signature_count} completada{selected.workflow.signature_count === 1 ? "" : "s"}</span><Icon name="chevron" size={17} /></summary>
             <ol>
               {selected.activeTurn ? (
@@ -1561,76 +1583,69 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               onSent={() => { void openRound(selected.workflow.id); }}
             />
           </section>}
-          <details className="tracking-section version-section" open={selected.workflow.status === "completed" || (selected.workflow.signature_count > 0 && !selected.activeTurn && !selected.queue.length && reservedInvitationCount === 0)}>
-            <summary><span><span className="section-kicker">Archivo vigente</span><strong>Versión actual</strong></span><span>Versión {currentVersion?.sequence ?? 0}</span><Icon name="chevron" size={17} /></summary>
-            <div className="section-action-row"><p>Revisa la copia vigente y consulta las versiones sustituidas.</p><button className="signout" onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar PDF actual</button></div>
-            {currentVersion && <article className="current-version-card">
-              <div className="version-summary">
-                <strong>
-                  Versión {currentVersion.sequence}
-                </strong>
-                <span>
-                  {Math.ceil(currentVersion.byte_size / 1024)} KB · {new Date(currentVersion.created_at).toLocaleString()}
-                </span>
-                <span className="version-author">
-                  Cargada por <strong>{currentVersion.submitted_by_name || (currentVersion.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>
-                  {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
-                </span>
-              </div>
-              {selected.workflow.status !== "completed" && (
-                <div className="final-approval">
-                  <div className="final-approval-title">
-                    <span><Icon name="check" size={17} /></span>
-                    <div>
-                      <strong>Cerrar el proceso con esta versión</strong>
-                      <p>Descarga y revisa el PDF antes de aceptarlo. Después no podrán añadirse más firmas.</p>
-                    </div>
-                  </div>
-                  <label className="final-confirm">
-                    <input
-                      type="checkbox"
-                      checked={finalConfirmed}
-                      onChange={(event) => setFinalConfirmed(event.target.checked)}
-                    />
-                    <span><strong>He revisado el PDF</strong><small>Confirmo que esta será la versión final del documento.</small></span>
-                  </label>
-                  <button
-                    className="primary final-button"
-                    disabled={!finalConfirmed}
-                    onClick={() => manageRound("finalize", currentVersion.id)}
-                  >
-                    Aceptar versión final y cerrar el proceso
-                  </button>
-                </div>
-              )}
-            </article>}
-            <aside className="retention-note">
-              <Icon name="clock" size={18} />
-              <div>
-                <strong>Conservación y plazos</strong>
-                <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a las 48 horas o al completar la firma. Cada versión sustituida permanece disponible para ti hasta 48 horas; al cerrar el proceso, el PDF final se conserva durante 5 días.</p>
-              </div>
-            </aside>
+          <section className="tracking-history" aria-label="Historial de versiones">
             {previousVersions.length > 0 && <details className="history-disclosure">
-              <summary>Versiones anteriores <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
+              <summary>Historial de versiones <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
               <ul className="submission-list">
                 {previousVersions.map((version: any) => (
                   <li key={version.id}>
                     <strong>Versión {version.sequence}</strong>
                     <span>{Math.ceil(version.byte_size / 1024)} KB · {new Date(version.created_at).toLocaleString()}</span>
                     <span className="version-author">Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}</span>
+                    {version.delete_after && <span>Disponible hasta {new Date(version.delete_after).toLocaleString()}</span>}
                     <div className="version-actions">
-                      <button className="text-button" onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
-                      <button className="text-button" onClick={() => manageRound("rollback", version.id)}>Recuperar esta versión</button>
+                      <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
+                      <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => manageRound("rollback", version.id)}>Recuperar esta versión</button>
                     </div>
                   </li>
                 ))}
               </ul>
             </details>}
+          </section>
+          <details className="process-controls"><summary>Opciones del proceso</summary>
+            <div className="owner-actions">
+              {selected.workflow.status === "active" ? (
+                <button
+                  className="signout"
+                  onClick={() => manageRound("pause")}
+                >
+                  Detener proceso
+                </button>
+              ) : selected.workflow.status === "paused_error" ? (
+                <button
+                  className="signout"
+                  onClick={() => manageRound("resume")}
+                >
+                  Reanudar proceso
+                </button>
+              ) : null}
+              {selected.activeTurn && (
+                <button
+                  className="signout"
+                  onClick={() => manageRound("release_turn")}
+                >
+                  Liberar turno actual
+                </button>
+              )}
+              {selected.queue.length > 0 && (
+                <button
+                  className="signout"
+                  onClick={() => manageRound("skip_next")}
+                >
+                  Retirar primera espera
+                </button>
+              )}
+              <button
+                className="danger-button"
+                onClick={() => manageRound("purge")}
+              >
+                <Icon name="trash" size={16} /> Eliminar proceso
+              </button>
+            </div>
           </details>
           {selected.reports.length > 0 && (
-            <>
-              <h4>Incidencias</h4>
+            <section className="tracking-incidents" role="region" aria-label="Incidencias">
+              <h4>Incidencias que requieren revisión</h4>
               <ul className="submission-list">
                 {selected.reports.map((report: any) => (
                   <li key={report.id}>
@@ -1639,11 +1654,11 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                   </li>
                 ))}
               </ul>
-            </>
+            </section>
           )}
         </div>
       )}
-      <Notice message={notice} />
+      {!selected && <Notice message={notice} />}
     </section>
   );
 }

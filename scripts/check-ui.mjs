@@ -223,9 +223,36 @@ try {
     });
     state.failTracking = false;
     await flow.getByRole('button', { name: 'Actualizar', exact: true }).click();
-    await flow.locator('.version-section').locator('summary').click();
-    const finalButton = flow.getByRole('button', { name: 'Aceptar versión final y cerrar el proceso', exact: true });
+    const finalButton = flow.getByRole('button', { name: 'Aceptar PDF final y cerrar firmas', exact: true });
+    await check(`current PDF precedes participants and has one download (${width})`, async () => {
+      assert.equal(await flow.getByRole('button', { name: 'Descargar PDF actual', exact: true }).count(), 1);
+      assert(await flow.locator('.version-section').evaluate(node => Boolean(node.compareDocumentPosition(document.querySelector('.signature-queue')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+      assert.equal(await flow.locator('.process-controls').getAttribute('open'), null);
+      assert.equal(await flow.getByLabel('He revisado el PDF').isDisabled(), true);
+      assert(await flow.getByText('Faltan 2 firmas previstas.', { exact: false }).isVisible());
+    });
     await check(`final confirmation required (${width})`, async () => assert.equal(await finalButton.isDisabled(), true));
+    await flow.getByRole('button', { name: 'Descargar PDF actual', exact: true }).click();
+    await flow.getByLabel('He revisado el PDF').check();
+    state.signatures = 1;
+    await flow.getByRole('button', { name: 'Actualizar', exact: true }).click();
+    await check(`new PDF requires a new review (${width})`, async () => {
+      await flow.getByText('1 de 2 firmas recibidas', { exact: true }).waitFor();
+      assert.equal(await flow.getByLabel('He revisado el PDF').isChecked(), false);
+      assert.equal(await flow.getByLabel('He revisado el PDF').isDisabled(), true);
+      assert.equal(await finalButton.isDisabled(), true);
+    });
+    await flow.locator('.signature-queue > summary').click();
+    state.signatures = 2;
+    await flow.getByRole('button', { name: 'Actualizar', exact: true }).click();
+    await check(`goal reached guides review without auto-closing (${width})`, async () => {
+      await flow.getByText('Todas las firmas previstas se han recibido', { exact: true }).waitFor();
+      assert.equal(state.status, 'active');
+      assert.equal(await flow.locator('.signature-queue').getAttribute('open'), '');
+      assert.equal(await flow.locator('.owner-detail').evaluate(node => node.scrollWidth <= node.clientWidth), true);
+    });
+    await flow.screenshot({ path: `${output}/tracking-review-${width}.png`, fullPage: true });
+    await flow.getByRole('button', { name: 'Descargar PDF actual', exact: true }).click();
     await flow.getByLabel('He revisado el PDF').check();
     flow.on('dialog', dialog => dialog.accept());
     await finalButton.click();
