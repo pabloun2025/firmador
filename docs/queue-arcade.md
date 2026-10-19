@@ -10,6 +10,15 @@ progresiva. El juego ya se muestra abierto; se inicia explícitamente. Teclado,
 táctil y botones, pausa manual y pausa automática al ocultar la pestaña.
 El juego no modifica la cola ni bloquea que llegue el turno de firma.
 
+Revisión compacta (rama `design/compact-arcade-podium`, pendiente de publicación):
+solo se solicitan iniciales/nombre cuando un resultado positivo puede entrar en
+el top 3. Los empates no desplazan al récord anterior. El botón «Guardar récord»,
+con aviso de visibilidad pública y alternativa «Omitir», sustituye a la casilla
+de consentimiento. El servidor sigue verificando y decidiendo el podio final
+ante resultados simultáneos. Tres ranitas oro/plata/bronce sobre peldaños.
+La animación decorativa de espera mide 86 px y termina en cuatro segundos,
+sin botón de pausa; respeta movimiento reducido. El juego conserva su pausa.
+
 Ranking global (no por proceso, usuario ni dispositivo): tres resultados más
 altos, con desempate por antigüedad. El alias y resultado se publican únicamente
 tras consentimiento. No se copian nombre, correo, PDF ni identificadores de
@@ -30,8 +39,9 @@ proveedor. La retirada de alias se solicita por el contacto de privacidad.
   el guard existente. No es un sistema antitrampas completo: un bot puede ejecutar
   la simulación. No hay premios ni verificación de identidad del alias.
 - 300 inicios registrados/día globales y 10/hora por ranura de origen, sujetos
-  también a las cuotas globales de solicitudes. Al agotar cuota funciona el modo
-  práctica, sin récord persistente. Los límites no son topes de factura.
+  también a las cuotas globales de solicitudes. En la revisión compacta no hay
+  modo práctica: si el servidor no autoriza el inicio, se ofrece reintentar sin
+  afectar a la cola. Los límites no son topes de factura.
 - Hasta 500 tickets activos; limpieza de caducados en cada inicio. Si no vuelven
   a iniciarse partidas, los tickets caducados pueden permanecer físicamente hasta
   el siguiente inicio (no contienen datos del firmante). Solo tres récords.
@@ -51,8 +61,9 @@ proveedor. La retirada de alias se solicita por el contacto de privacidad.
   Persistencia, top 3, empate, concurrencia, replay, expiración, permisos y cupo.
 - `scripts/check-ui.mjs`: interfaz general y accesibilidad en 1440, 768 y 390 px.
 - `scripts/check-arcade-ui.mjs`: juego real con reloj determinista, prueba de
-  saltos, pausa, alias/consentimiento, envío único, recarga y caída del ranking
-  con modo práctica; todas las peticiones externas interceptadas.
+  saltos, pausa, iniciales solo al clasificar, publicación mediante botón, envío
+  único, recarga, podio compacto y reintento ante caída del servicio;
+  todas las peticiones externas interceptadas.
 
 ## Publicación
 
@@ -65,5 +76,5 @@ denegados a anon. Copia Git verificada y etiqueta de recuperación
 enviar el commit a `main`; confirmar su finalización en Cloudflare.
 No requiere servicios,
 proveedores de IA, bibliotecas ni credenciales nuevas. No ejecutar migraciones
-históricas ni cambiar tablas del flujo de firma. Mientras el backend no esté
-instalado, el frontend ofrece práctica y muestra la indisponibilidad del podio.
+históricas ni cambiar tablas del flujo de firma. La revisión compacta no cambia
+la base de datos ni la función desplegada; solo el cliente y sus pruebas.

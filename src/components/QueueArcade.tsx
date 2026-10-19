@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
+import { qualifiesForPodium } from '../lib/high-score';
 import { newGame, stepGame, type GameState } from '../../supabase/functions/_shared/queue-game';
 import './queue-arcade.css';
 type RecordRow = { id: string; alias: string; score: number };
 type Ticket = { id: string; seed: number };
 type Result = { ticket: Ticket | null; ticks: number; jumps: number[]; score: number };
+function PodiumFrog() {
+  return <svg className="podium-frog" viewBox="0 0 64 62" aria-hidden="true">
+    <path fill="currentColor" d="M8 33C5 25 7 9 18 9c8 0 10 7 14 7s6-7 14-7c11 0 13 16 10 24l5 12c-8 2-15 0-19-4H22c-4 4-11 6-19 4z" />
+    <ellipse cx="19" cy="21" rx="7" ry="8" fill="#fffef8" /><ellipse cx="45" cy="21" rx="7" ry="8" fill="#fffef8" />
+    <circle cx="20" cy="22" r="4" fill="#264a39" /><circle cx="44" cy="22" r="4" fill="#264a39" />
+    <path d="M16 34q16 9 32 0" stroke="#fffef8" strokeWidth="3" fill="none" strokeLinecap="round" />
+    <path d="m25 42 7 5 7-5-3 13h-8z" fill="#426752" /><circle cx="32" cy="53" r="7" fill="currentColor" stroke="#fffef8" strokeWidth="2" />
+  </svg>;
+}
 async function callArcade(body: Record<string, unknown>) {
   const client = await getSupabase();
   const controller = new AbortController();
@@ -32,7 +42,7 @@ export function QueueArcade() {
   const [rankingState, setRankingState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [busy, setBusy] = useState(false);
   const [alias, setAlias] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [message, setMessage] = useState('');
   const [saved, setSaved] = useState(false);
   useEffect(() => {
@@ -50,20 +60,20 @@ export function QueueArcade() {
       const data = await callArcade({ action: 'start' });
       ticket = { id: data.id, seed: data.seed };
       if (mounted.current) { setRecords(data.records); setRankingState('ready'); }
-    } catch { if (mounted.current) setMessage('Modo práctica: esta partida no podrá entrar en el ranking.'); }
+    } catch { if (mounted.current) setMessage('No se pudo iniciar el juego. Inténtalo de nuevo.'); return; }
     finally { busyRef.current = false; if (mounted.current) setBusy(false); }
     if (!mounted.current) return;
-    setRun(ticket); setScore(0); setResult(null); setSaved(false); setConsent(false);
+    setRun(ticket); setScore(0); setResult(null); setSaved(false); setDismissed(false); setAlias('');
     setPaused(false); pausedRef.current = false; jumpRef.current = false;
     setPlaying(true); canvasRef.current?.focus();
   };
   const save = async () => {
-    if (!result?.ticket || !consent || busyRef.current || saved) return;
+    if (!result?.ticket || !qualifiesForPodium(result.score, records) || busyRef.current || saved) return;
     busyRef.current = true; setBusy(true); setMessage('');
     try {
-      const data = await callArcade({ action: 'finish', id: result.ticket.id, ticks: result.ticks, jumps: result.jumps, alias, consent });
-      if (mounted.current) { setRecords(data.records); setRankingState('ready'); setSaved(true); setMessage(data.ranked ? '¡Tu resultado está en el top 3!' : 'Partida validada. Aún no alcanza el top 3.'); }
-    } catch { if (mounted.current) setMessage('No se pudo guardar. Comprueba tu alias e inténtalo de nuevo; la partida caduca a los 10 minutos.'); }
+      const data = await callArcade({ action: 'finish', id: result.ticket.id, ticks: result.ticks, jumps: result.jumps, alias, consent: true });
+      if (mounted.current) { setRecords(data.records); setRankingState('ready'); setSaved(true); setMessage(data.ranked ? '¡Récord guardado!' : 'Otra persona se ha adelantado. ¡Prueba otra vez!'); }
+    } catch { if (mounted.current) setMessage('No se pudo guardar el récord. Revisa el nombre e inténtalo de nuevo.'); }
     finally { busyRef.current = false; if (mounted.current) setBusy(false); }
   };
   useEffect(() => {
@@ -128,15 +138,15 @@ export function QueueArcade() {
     <p className="arcade-help">Toca el juego, pulsa espacio o usa Saltar. La cola sigue su curso.</p>
     <div className="arcade-controls"><button type="button" className="signout" disabled={busy || playing} onClick={start}>{busy && !result ? 'Preparando…' : result ? 'Volver a jugar' : 'Empezar'}</button>{playing && <button type="button" className="signout" onClick={pause}>{paused ? 'Continuar' : 'Pausa'}</button>}<button type="button" className="primary" disabled={!playing || paused} onClick={() => { jumpRef.current = true; }}>Saltar ↑</button></div>
     {result && <p className="arcade-result" role="status">{result.score ? `${result.score} ${result.score === 1 ? 'PDF superado' : 'PDFs superados'}. ¿Otra ronda?` : '¡Casi! Prueba a saltar un poco antes.'}</p>}
-    {result?.ticket && result.score > 0 && !saved && <form className="arcade-save" onSubmit={event => { event.preventDefault(); void save(); }}>
-      <label>Tu alias en el ranking<input value={alias} onChange={event => setAlias(event.target.value)} minLength={2} maxLength={24} required autoComplete="off" placeholder="Ej. Rana veloz" /></label>
-      <label className="arcade-consent"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} required /><span>Publicar mi alias y puntuación si entro en el top 3. No uses tu correo ni datos personales.</span></label>
-      <button className="primary" disabled={!consent || busy}>{busy ? 'Validando…' : 'Guardar mi resultado'}</button>
+    {result?.ticket && qualifiesForPodium(result.score, records) && !saved && !dismissed && <form className="arcade-save" onSubmit={event => { event.preventDefault(); void save(); }}>
+      <strong className="arcade-high-score">HIGH SCORE · {result.score}</strong>
+      <label>Tus iniciales o nombre<input value={alias} onChange={event => setAlias(event.target.value)} minLength={2} maxLength={24} required autoComplete="off" autoFocus placeholder="AAA" /></label>
+      <small id="high-score-privacy">Al guardar, tu nombre y puntuación serán públicos. Puedes usar un apodo.</small>
+      <div className="arcade-save-actions"><button className="primary" aria-describedby="high-score-privacy" disabled={busy}>{busy ? 'Guardando…' : 'Guardar récord'}</button><button type="button" className="text-button" disabled={busy} onClick={() => setDismissed(true)}>Omitir</button></div>
     </form>}
     {message && <p className="arcade-message" role="status">{message}</p>}
     <section className="arcade-ranking" aria-label="Mejores puntuaciones históricas"><div className="arcade-ranking-heading"><strong>Podio histórico</strong><span>TOP 3 · GLOBAL</span></div>
-      {rankingState === 'loading' ? <p>Cargando récords…</p> : rankingState === 'unavailable' ? <p>El ranking no está disponible ahora. Puedes jugar igualmente.</p> : <ol>{[0, 1, 2].map(index => <li key={index}><span className={`podium-rank rank-${index + 1}`}>{index + 1}</span><strong>{records[index]?.alias ?? 'Plaza libre'}</strong><span>{records[index] ? `${records[index].score} PDFs` : '—'}</span></li>)}</ol>}
-      <small>Se conservan los tres mejores resultados, aunque se cierre este documento. En caso de empate, queda primero el más antiguo.</small>
+      {rankingState === 'loading' ? <p>Cargando récords…</p> : rankingState === 'unavailable' ? <p>Los récords no están disponibles ahora.</p> : <ol className="arcade-podium">{[0, 1, 2].map(index => <li className={`podium-place place-${index + 1}`} key={index} aria-label={`${index + 1}º: ${records[index]?.alias ?? 'Sin récord'}, ${records[index]?.score ?? 0} puntos`}><PodiumFrog /><strong title={records[index]?.alias}>{records[index]?.alias ?? '—'}</strong><span className="podium-points">{records[index]?.score ?? '—'}</span><span className="podium-step" aria-hidden="true">{index + 1}</span></li>)}</ol>}
     </section>
   </section>;
 }

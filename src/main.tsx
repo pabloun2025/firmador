@@ -168,11 +168,10 @@ function Notice({
   ) : null;
 }
 function SigningLeap({ waiting = false }: { waiting?: boolean }) {
-  const [paused, setPaused] = useState(false);
-  return <><div className={`signing-leap ${waiting ? "signing-leap-waiting" : ""} ${paused ? "leap-paused" : ""}`} aria-hidden="true">
+  return <div className={`signing-leap ${waiting ? "signing-leap-waiting" : ""}`} aria-hidden="true">
     {[0, 1, 2].map(index => <div className={`leap-paper leap-paper-${index}`} key={index}><span>PDF</span><i /><i /><i /><svg viewBox="0 0 100 30"><path d="M5 25 Q35 -8 30 8 T23 22 Q43 2 45 18 T60 15 Q65 23 94 12" /></svg></div>)}
     <img className="signing-frog" src="/frog-signing.webp" width={160} height={107} alt="" />
-  </div>{waiting && <button className="text-button leap-pause" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? "Reanudar animación" : "Pausar animación"}</button>}</>;
+  </div>;
 }
 function DocumentArt() {
   return (

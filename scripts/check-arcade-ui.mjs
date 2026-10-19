@@ -58,24 +58,35 @@ try {
         window.__arcadeFrame(1+tick*(1000/60+.001));
       }
     },{ticks:game.tick,jumps});
-    await page.getByLabel('Tu alias en el ranking').waitFor();
-    await page.getByLabel('Tu alias en el ranking').fill('Rana veloz');
-    assert(await page.getByRole('button',{name:'Guardar mi resultado'}).isDisabled());
-    await page.locator('.arcade-consent input').check();
-    await page.getByRole('button',{name:'Guardar mi resultado'}).click();
-    await page.getByText('¡Tu resultado está en el top 3!',{exact:true}).waitFor();
+    await page.getByLabel('Tus iniciales o nombre').waitFor();
+    assert.equal(await page.locator('.arcade-save input[type=checkbox]').count(),0);
+    await page.getByLabel('Tus iniciales o nombre').fill('Rana veloz');
+    await page.getByRole('button',{name:'Guardar récord'}).click();
+    await page.getByText('¡Récord guardado!',{exact:true}).waitFor();
     assert.equal(submissions,1);
     await page.reload();
     await page.getByPlaceholder('Como quieres aparecer').fill('Invitado de prueba');
     await page.getByRole('button',{name:'Solicitar turno para firmar',exact:true}).click();
     await page.getByRole('heading',{name:'Salto de firma'}).waitFor();
     await page.getByText('Rana veloz',{exact:true}).waitFor();
-    offline=true;
+    assert.equal(await page.getByRole('button',{name:'Pausar animación',exact:true}).count(),0);
+    const animation=await page.locator('.signing-leap-waiting').boundingBox();assert(animation.height<=90);
+    const first=await page.locator('.place-1').boundingBox(),second=await page.locator('.place-2').boundingBox();
+    assert(first.x>second.x&&first.y<second.y,'First place is centered and taller');
+    // A lower result must never ask for a name.
     await page.getByRole('button',{name:'Empezar',exact:true}).click();
-    await page.getByText('Modo práctica: esta partida no podrá entrar en el ranking.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Pausa',exact:true}).waitFor();
+    await page.evaluate(()=>{window.__arcadeFrame(1);for(let tick=1;tick<=200;tick++)window.__arcadeFrame(1+tick*(1000/60+.001));});
+    await page.getByText('¡Casi! Prueba a saltar un poco antes.',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Tus iniciales o nombre').count(),0);
+    offline=true;
+    await page.getByRole('button',{name:'Volver a jugar',exact:true}).click();
+    await page.getByText('No se pudo iniciar el juego. Inténtalo de nuevo.',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Pausa',exact:true}).count(),0);
+    assert.equal(await page.getByText(/Modo práctica/).count(),0);
     assert(await page.getByRole('heading',{name:'Estás en la cola',exact:true}).isVisible());
     assert.deepEqual(errors,[]);
-    console.log(`PASS ${width}: game, pause, proof, consent, single submit, ranking after reload, offline practice, no overflow/errors`);
+    console.log(`PASS ${width}: qualifying-name prompt, no checkbox, verified save, persisted podium, lower score silent, compact animation, offline retry, no overflow/errors`);
     await context.close();
   }
 } finally { await browser.close(); }
