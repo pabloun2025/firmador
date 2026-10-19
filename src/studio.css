@@ -72,6 +72,41 @@ label, .login-card label { font-weight: 600; font-size: 13px; }
 .service-note, .legal-note { border-radius: 4px; }
 .site-footer { border-top: 1px solid #cfd9d0; color: #52665d; }
 .studio-document figcaption > span { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.studio-document { height: 290px; }
+.signing-leap { position: relative; height: 185px; width: 100%; max-width: 550px; margin: 0 auto; overflow: hidden; }
+.leap-paper { position: absolute; width: 23%; height: 112px; bottom: 12px; padding: 12px; background: #fffef9; border: 1px solid #bdcdb9; box-shadow: 3px 4px 0 #cad7c45c; border-radius: 3px; transform: rotate(-5deg); }
+.leap-paper-0 { left: 3%; }
+.leap-paper-1 { left: 38%; bottom: 20px; transform: rotate(2deg); }
+.leap-paper-2 { left: 73%; bottom: 29px; transform: rotate(-3deg); }
+.leap-paper > span { font-size: 10px; font-weight: 600; color: #46604e; }
+.leap-paper i { display: block; height: 3px; background: #c8d1c2; margin-top: 8px; }
+.leap-paper i:last-of-type { width: 70%; }
+.leap-paper svg { width: 85%; height: 28px; margin-top: 4px; fill: none; stroke: #20543e; stroke-width: 2.5; }
+.leap-paper svg path { stroke-dasharray: 180; stroke-dashoffset: 0; animation: leap-sign 4s ease both; }
+.leap-paper-1 svg path { animation-delay: 1.3s; }
+.leap-paper-2 svg path { animation-delay: 2.6s; }
+.signing-leap .signing-frog { position: absolute; width: 29%; height: auto; object-fit: contain; left: 0; top: 35px; z-index: 1; animation: leap-across 4s ease-in-out both; pointer-events: none; }
+.signing-leap-waiting { height: 160px; max-width: 340px; margin-top: 16px; margin-bottom: 12px; }
+.signing-leap-waiting .leap-paper { height: 95px; padding: 9px; }
+.signing-leap-waiting .signing-frog { animation: leap-across 6s ease-in-out infinite; }
+.signing-leap-waiting .leap-paper svg path { animation-duration: 6s; animation-iteration-count: infinite; }
+.signing-leap-waiting .leap-paper-1 svg path { animation-delay: 2s; }
+.signing-leap-waiting .leap-paper-2 svg path { animation-delay: 4s; }
+.leap-paused .signing-frog, .leap-paused .leap-paper svg path { animation-play-state: paused; }
+.leap-pause { font-size: 11px; margin: 0 auto 8px; display: block; }
+@keyframes leap-across {
+  0%, 12% { left: 0; top: 35px; transform: rotate(0deg); }
+  27% { left: 18%; top: 0; transform: rotate(-9deg); }
+  42%, 48% { left: 35%; top: 27px; transform: rotate(0deg); }
+  65% { left: 53%; top: 0; transform: rotate(-9deg); }
+  82%, 100% { left: 70%; top: 18px; transform: rotate(0deg); }
+}
+@keyframes leap-sign { from { stroke-dashoffset: 180; } 32%, to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .signing-frog, .leap-paper svg path, .signing-leap-waiting .signing-frog { animation: none; }
+  .signing-leap .signing-frog { left: 35%; top: 27px; animation: none; }
+  .leap-pause { display: none; }
+}
 @media (max-width: 900px) {
   .auth-grid { gap: 28px; grid-template-columns: 1fr 1fr; min-height: 590px; }
   .auth, .workspace, .legal-page { padding-left: 24px; padding-right: 24px; }

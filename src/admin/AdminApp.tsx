@@ -84,7 +84,7 @@ async function invokeRecovery<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 function AdminBrand() {
-  return <div className="admin-brand"><span><img src="/frog-mark.svg" alt="" /></span><div><strong>LeapSign</strong><small>Centro de control</small></div></div>;
+  return <div className="admin-brand"><span><img src="/frog-brand.webp" alt="" /></span><div><strong>LeapSign</strong><small>Centro de control</small></div></div>;
 }
 
 function Login({ onSession }: { onSession: (session: Session) => void }) {

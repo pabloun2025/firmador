@@ -138,7 +138,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   );
 }
 function FrogMark() {
-  return <img className="frog-mark" src="/frog-mark.svg" alt="" aria-hidden="true" />;
+  return <img className="frog-mark" src="/frog-brand.webp" width={40} height={40} alt="" aria-hidden="true" />;
 }
 function Brand() {
   return (
@@ -166,12 +166,19 @@ function Notice({
     </p>
   ) : null;
 }
+function SigningLeap({ waiting = false }: { waiting?: boolean }) {
+  const [paused, setPaused] = useState(false);
+  return <><div className={`signing-leap ${waiting ? "signing-leap-waiting" : ""} ${paused ? "leap-paused" : ""}`} aria-hidden="true">
+    {[0, 1, 2].map(index => <div className={`leap-paper leap-paper-${index}`} key={index}><span>PDF</span><i /><i /><i /><svg viewBox="0 0 100 30"><path d="M5 25 Q35 -8 30 8 T23 22 Q43 2 45 18 T60 15 Q65 23 94 12" /></svg></div>)}
+    <img className="signing-frog" src="/frog-signing.webp" width={160} height={107} alt="" />
+  </div>{waiting && <button className="text-button leap-pause" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? "Reanudar animación" : "Pausar animación"}</button>}</>;
+}
 function DocumentArt() {
   return (
     <figure className="document-art studio-document" aria-label="Recorrido del documento: preparar, firmar y recoger">
       <div className="studio-document-top"><span>EL RECORRIDO DEL PDF</span><FrogMark /></div>
-      <div className="studio-paper" aria-hidden="true"><span>PDF</span><i /><i /><i /><div className="studio-signature">L</div><b>✓</b></div>
-      <figcaption><span><b>01</b> Prepara</span><span><b>02</b> Firma</span><span><b>03</b> Recoge</span></figcaption>
+      <SigningLeap />
+      <figcaption>De PDF en PDF, firma a firma.</figcaption>
     </figure>
   );
 }
@@ -473,7 +480,7 @@ function WaitingRoom({ position, lastChecked }: { position: number; lastChecked:
     <strong className="waiting-position">{Math.max(0, position - 1)}</strong>
     <p>{position <= 1 ? "Eres la siguiente persona." : `personas delante de ti`}</p>
     </div>
-    <div className="queue-motion" aria-hidden="true"><span /><i /></div>
+    <SigningLeap waiting />
     <small>Se comprueba cada 5 segundos mientras esta pantalla está visible{lastChecked ? ` · última ${lastChecked.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}</small>
     <FrogQueueGame />
   </section>;

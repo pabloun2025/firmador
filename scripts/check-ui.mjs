@@ -97,7 +97,7 @@ try {
     const authContext = await isolatedContext(width);
     const authPage = await authContext.newPage();
     const images = [];
-    authPage.on('request', request => { if (request.url().endsWith('.png')) images.push(request.url()); });
+    authPage.on('request', request => { if (request.url().endsWith('/leapsign-secure-flow.png')) images.push(request.url()); });
     authPage.on('pageerror', error => failures.push(`Auth ${width}: ${error.message}`));
     await authPage.goto(base);
     await authPage.getByRole('heading', { name: 'Accede a LeapSign' }).waitFor();

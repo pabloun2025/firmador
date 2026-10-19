@@ -1,7 +1,8 @@
 # Propuesta visual: mesa documental
 
 Propuesta de interfaz aislada en `design/editorial-workspace-20261019`.
-No publicada. No modifica backend, datos, cuotas ni el flujo de firma.
+Publicación autorizada por el propietario el 19 de octubre de 2026.
+No modifica backend, datos, cuotas ni el flujo de firma.
 
 ## Dirección
 
@@ -9,6 +10,10 @@ Verde tinta, papel cálido y superficies de trabajo blancas. Encabezados de acce
 editoriales; tipografía funcional más ligera en los formularios. Bordes precisos,
 sombras mínimas, iconos existentes y rana conservada. La ilustración pesada de
 acceso se sustituye por una composición documental ligera, sin recursos externos.
+La rana elegida (opción 2) se utiliza en el logo, favicon y personaje con pluma.
+Animación CSS de salto y rúbricas: una vez al acceder, ciclo durante la espera,
+control para pausar y alternativa estática con movimiento reducido. Recursos
+WebP locales de aproximadamente 20 KB en conjunto; sin vídeo ni librería adicional.
 
 ## Alcance
 
