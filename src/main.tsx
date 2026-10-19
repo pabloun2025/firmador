@@ -9,6 +9,7 @@ import { startPolling } from "./lib/polling";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
+import "./studio.css";
 
 type IconName =
   | "arrow"
@@ -167,17 +168,10 @@ function Notice({
 }
 function DocumentArt() {
   return (
-    <figure className="document-art">
-      <picture>
-      <source media="(min-width: 601px)" srcSet="/leapsign-secure-flow.png" />
-      <img
-        src="/frog-mark.svg"
-        width={1536}
-        height={1024}
-        decoding="async"
-        alt="Una rana avanza entre las versiones protegidas de un documento"
-      />
-      </picture>
+    <figure className="document-art studio-document" aria-label="Recorrido del documento: preparar, firmar y recoger">
+      <div className="studio-document-top"><span>EL RECORRIDO DEL PDF</span><FrogMark /></div>
+      <div className="studio-paper" aria-hidden="true"><span>PDF</span><i /><i /><i /><div className="studio-signature">L</div><b>✓</b></div>
+      <figcaption><span><b>01</b> Prepara</span><span><b>02</b> Firma</span><span><b>03</b> Recoge</span></figcaption>
     </figure>
   );
 }
