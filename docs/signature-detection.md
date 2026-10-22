@@ -54,3 +54,30 @@ primero y Edge después según docs/v1.1-release.md.
 
 El motor antiguo queda solo para compatibilidad y diagnóstico histórico: el
 worker de aceptación usa `validator.detection`, no el motor criptográfico.
+
+## Verificación y despliegue del 22 de octubre de 2026
+
+- npm: 146 pruebas; Python: 86 (incluyendo 24 de detección, certificados de
+  prueba EC/ES); Deno: 6; PostgreSQL: 15 grupos con concurrencia y liberación
+  segura de reservas; Chromium/Axe: 161 comprobaciones a 1440/768/390 px.
+- Pruebas RED/GREEN del contrato nuevo, mensajes, UI y SQL. Se aceptan firmas
+  sintéticas con integridad matemática dañada y con certificado vencido porque
+  no se valida eso. Campos vacíos no cuentan. Sin certificado, nombre desconocido.
+- Online en Supabase v1 y Render: original ya con dos firmas, pase 1 → tres,
+  pase 2 → cuatro; mismo nombre de firmante en todas, nombre de archivo de carga
+  totalmente distinto. Se rechazaron cero y dos firmas nuevas con sus mensajes,
+  y se pudo corregir inmediatamente el archivo sin esperar el lease. Turnos
+  completados: dos, no cuatro. Inventarios/nombres y estados not_evaluated correctos.
+- Recibo idéntico en reintento, invitaciones consumidas, aprobación y descarga
+  final byte a byte idéntica. Sin emails enviados. Se purgó solo el proceso
+  sintético y su usuario temporal; no se eliminaron documentos existentes.
+- Migración aplicada en lgsdoutarthfymbjgdrj. Submit versión 25, JWT obligatorio.
+  Render instancia free, auto-deploy no; dep-dbd48rjl550s73aj9h70 en f003758.
+  Readiness autenticada informa la política de detección. Los secretos no cambiaron.
+- Una primera lectura de claves existentes por la API de gestión respondió 500
+  antes de crear datos de prueba; repetir esa lectura funcionó. No fue una carga
+  rechazada por la aplicación ni se rotaron credenciales para sortearlo.
+
+Persisten las advertencias conocidas de tamaño del bundle y deprecación de
+Starlette. No se ha probado el certificado real del usuario ni se afirma un
+escaneo oficial de seguridad. V2 no se modificó.
