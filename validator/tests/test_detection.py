@@ -26,6 +26,7 @@ def test_original_may_already_be_signed_and_same_person_may_sign_again(sample,be
     assert result['policy']=='leapsign-v1.1-signature-detection-1'
     assert all(s['certificate']['subject']=='Persona sintetica' for s in result['signatures'])
     assert all(s['integrity']=='not_evaluated' for s in result['signatures'])
+    assert all(s['byteRange']==[] for s in result['signatures'])
 
 
 def test_does_not_validate_crypto_or_require_exact_incremental_prefix(sample):

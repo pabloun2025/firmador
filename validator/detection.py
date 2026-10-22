@@ -48,10 +48,8 @@ def detect_signatures(pdf:bytes)->dict:
             name=str(signature.get('/Name',''))[:512]
             if cert is not None:name=str(cert.subject.native.get('common_name') or cert.subject.human_friendly)[:512]
             info=data['signer_infos'][0]
-            byte_range=signature.get('/ByteRange',[])
-            br=[int(x) for x in byte_range] if len(byte_range)==4 else [0,0,0,0]
             records.append({'id':identifier,'field':str(field)[:256],'revision':reader.xrefs.total_revisions-1,
-                'byteRange':br,'declaredSigningTime':None,
+                'byteRange':[],'declaredSigningTime':None,
                 'certificate':{'subject':name,'issuer':str(cert.issuer.human_friendly)[:512] if cert else '',
                     'serial':format(cert.serial_number,'x') if cert else '',
                     'fingerprint':sha256(cert.dump()).hexdigest() if cert else '',
