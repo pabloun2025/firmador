@@ -1,0 +1,10 @@
+.signature-inventory { width: 100%; min-width: 0; margin-top: 12px; padding-top: 12px; border-top: 1px solid #dce5df; font-size: .85rem; overflow-wrap: anywhere; }
+.signature-inventory p { margin: 6px 0; font-size: inherit; }
+.signature-inventory summary { cursor: pointer; min-height: 44px; align-content: center; }
+.signature-inventory .inventory-signatures { list-style: none; padding: 0; margin: 0; }
+.signature-inventory .inventory-signatures > li { display: block; padding: 12px 0; border-top: 1px solid #dce5df; }
+.signature-inventory .inventory-signatures dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; margin: 12px 0; }
+.signature-inventory .inventory-signatures dl > div { min-width: 0; padding: 0; background: transparent; border: 0; }
+.signature-inventory dt { font-size: .8rem; }
+.signature-inventory dd { margin: 4px 0 0; }
+.inventory-hash code { font-size: .8rem; }

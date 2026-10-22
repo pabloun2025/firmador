@@ -8,6 +8,7 @@ import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
 import { QueueArcade } from "./components/QueueArcade";
 import { FinalDocument, FinalShareCard } from "./components/FinalDocument";
+import { SignatureInventory } from "./components/SignatureInventory";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -1473,6 +1474,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                   {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
                 </span>
               </div>
+              <SignatureInventory hash={currentVersion.sha256} inventory={selected.signatureInventories?.find((entry:any)=>entry.version_id===currentVersion.id)} signatures={selected.pdfSignatures?.filter((entry:any)=>entry.version_id===currentVersion.id)} />
               {canClose && (
                 <div className="final-approval">
                   <div className="final-approval-title">
@@ -1583,15 +1585,16 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               onSent={() => { void openRound(selected.workflow.id); }}
             />
           </section>}
-          <section className="tracking-history" aria-label="Historial de versiones">
+          <section className="tracking-history" aria-label="Versiones y firmas">
             {previousVersions.length > 0 && <details className="history-disclosure">
-              <summary>Historial de versiones <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
+              <summary>Versiones y firmas anteriores <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
               <ul className="submission-list">
                 {previousVersions.map((version: any) => (
                   <li key={version.id}>
                     <strong>Versión {version.sequence}</strong>
                     <span>{Math.ceil(version.byte_size / 1024)} KB · {new Date(version.created_at).toLocaleString()}</span>
                     <span className="version-author">Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}</span>
+                    <SignatureInventory hash={version.sha256} inventory={selected.signatureInventories?.find((entry:any)=>entry.version_id===version.id)} signatures={selected.pdfSignatures?.filter((entry:any)=>entry.version_id===version.id)} />
                     {version.delete_after && <span>Disponible hasta {new Date(version.delete_after).toLocaleString()}</span>}
                     <div className="version-actions">
                       <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
