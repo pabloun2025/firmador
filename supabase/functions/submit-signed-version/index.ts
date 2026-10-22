@@ -1,7 +1,6 @@
 import { protectEndpoint, budgetedFetch, reserveUpload } from "../_shared/economic-guard.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { comparePdfProfiles, inspectPdf, validateRelatedSize } from "../_shared/pdf-validation.ts";
-import { validateRelatedDocumentName } from "../_shared/document-name.ts";
 import { InventoryUnavailable, requestSignatureInventory } from "../_shared/signature-inventory.ts";
 import { submitValidatedVersion } from "../_shared/validated-submission.ts";
 
@@ -150,7 +149,6 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       throw new Error(
         "Hay una versión más reciente del documento. Vuelve a abrir tu turno.",
       );
-    validateRelatedDocumentName(workflow.original_filename || `${workflow.title}.pdf`, document.name);
     const { data: parent } = await admin
       .from("document_versions")
       .select("sha256,byte_size,storage_path,page_count,page_dimensions")
@@ -162,7 +160,6 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       throw new Error(
         "El archivo es igual a la versión anterior. Descarga el PDF, fírmalo y vuelve a cargar la copia resultante.",
       );
-    validateRelatedSize(Number(parent.byte_size), document.size);
     const candidateProfile = await inspectPdf(bytes);
     if (inventoryFlag.data.enabled) {
       if (Deno.env.get("PDF_SIGNATURE_INVENTORY_ENABLED") !== "true") throw new InventoryUnavailable();
@@ -179,7 +176,6 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
               const result = await admin.storage.from("firmador-documents").download(parent.storage_path);
               if(result.error || !result.data)throw new InventoryUnavailable();
               const parentBytes = new Uint8Array(await result.data.arrayBuffer());
-              comparePdfProfiles(await inspectPdf(parentBytes),candidateProfile);
               return parentBytes;
             },
           });
@@ -190,6 +186,7 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       await Promise.allSettled([notifyOwnerWhenComplete(admin,id)]);
       return Response.json(receipt,{headers:{...cors,"Cache-Control":"no-store"}});
     }
+    validateRelatedSize(Number(parent.byte_size), document.size);
     let parentProfile;
     if (parent.page_count && Array.isArray(parent.page_dimensions) && parent.page_dimensions.length) {
       parentProfile = { pageCount: Number(parent.page_count), pageDimensions: parent.page_dimensions };

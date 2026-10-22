@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
-import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
+import { documentFilename } from "./lib/document-name";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
 import { QueueArcade } from "./components/QueueArcade";
@@ -823,15 +823,10 @@ function RoundAccess({ id }: { id: string }) {
                       disabled={!downloaded}
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null;
-                        if (file && expectedFilename && !isRelatedDocumentName(expectedFilename, file.name)) {
+                        if (file && file.size > 10 * 1024 * 1024) {
                           setSignedDocument(null);
                           setNoticeTarget("submission"); setNoticeTone("error");
-                          setNotice("El nombre del archivo que intentas subir no corresponde al nombre original.");
-                          e.target.value = "";
-                        } else if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
-                          setSignedDocument(null);
-                          setNoticeTarget("submission"); setNoticeTone("error");
-                          setNotice("Este archivo tiene un tamaño muy distinto al PDF descargado. Comprueba que seleccionaste el documento correcto.");
+                          setNotice("El PDF debe pesar como máximo 10 MB.");
                           e.target.value = "";
                         } else setSignedDocument(file);
                       }}

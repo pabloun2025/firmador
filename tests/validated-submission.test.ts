@@ -32,7 +32,7 @@ describe('validated submission orchestration (mocked I/O; real SQL tested separa
   it('never uploads or commits when validation is uncertain',async()=>{
     const f=fixture();f.validate.mockRejectedValue(new Error('timeout'));
     await expect((await subject()).submitValidatedVersion(f.options)).rejects.toThrow();
-    expect(f.upload).not.toHaveBeenCalled();expect(f.rpc).toHaveBeenCalledTimes(1);
+    expect(f.upload).not.toHaveBeenCalled();expect(f.rpc.mock.calls.map(c=>c[0])).toEqual(['begin_signature_validation','release_signature_validation']);
   });
   it('does not commit on upload failure',async()=>{
     const f=fixture();f.upload.mockResolvedValue({error:{} as any});

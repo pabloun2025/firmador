@@ -23,7 +23,14 @@ export async function submitValidatedVersion(o:Options):Promise<Receipt> {
   if(accepted(reserved.data,o.digest))return reserved.data;
   const ticket=reserved.data;
   if(ticket?.state!=='reserved'||typeof ticket.claim_id!=='string'||typeof ticket.lease_token!=='string'||typeof ticket.storage_path!=='string')throw pending();
-  const report=await o.validate();
+  let report:InventoryReport;
+  try {report=await o.validate();}
+  catch(error){
+    // No PDF upload has started: releasing this fenced reservation is safe and
+    // lets the user correct a file without waiting for the 120-second lease.
+    try {await o.client.rpc('release_signature_validation',{p_claim_id:ticket.claim_id,p_lease_token:ticket.lease_token});}catch {/* Lease still expires normally. */}
+    throw error;
+  }
   await o.reserveUpload();
   const uploaded=await o.client.storage.from('firmador-documents').upload(ticket.storage_path,o.bytes,{contentType:'application/pdf',upsert:false});
   if(uploaded.error)throw new Error('No pudimos guardar el PDF firmado. Conserva el archivo e inténtalo de nuevo.');

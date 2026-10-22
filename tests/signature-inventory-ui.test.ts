@@ -13,12 +13,18 @@ const signatures=[{signature_id:'s3',record:{id:'s3',field:'Signature3',declared
   certificate:{subject:'<script>Nombre sintético</script>',issuer:'CA de pruebas',serial:'secret-unneeded-serial'},
   algorithms:{digest:'sha256',signature:'ecdsa'},integrity:'valid',trust:'not_evaluated',revocation:'unknown',certificateValidity:'expired'}}];
 describe('owner signature inventory UI',()=>{
- it('labels historical versions honestly instead of inventing validation',async()=>{
-   const html=await render();expect(html).toContain('Relación no comprobada');expect(html).not.toContain('Integridad verificada');expect(html).toContain('aaaaaaaaaaaa');
+ it('shows detected names without implying validity even for older inventories',async()=>{
+   const html=await render(inventory,signatures);
+   expect(html).toContain('3 firmas detectadas');expect(html).toContain('Nombre');
+   expect(html).not.toContain('Integridad verificada');expect(html).not.toContain('Vencido');
+   expect(html).toContain('No se verifica la validez');
  });
- it('separates total signatures from received turns and preserves independent dimensions',async()=>{
-   const html=await render(inventory,signatures);expect(html).toContain('3 firmas digitales');expect(html).toContain('2 heredadas');expect(html).toContain('1 añadida');
-   expect(html).toContain('Integridad verificada');expect(html).toContain('No evaluada');expect(html).toContain('Desconocida');expect(html).toContain('Vencido');expect(html).toContain('no determina la validez jurídica');
+ it('labels historical versions honestly instead of inventing validation',async()=>{
+   const html=await render();expect(html).toContain('No hay información de firmas disponible');expect(html).not.toContain('Integridad verificada');expect(html).toContain('aaaaaaaaaaaa');
+ });
+ it('separates total signatures from received turns without a validation panel',async()=>{
+   const html=await render(inventory,signatures);expect(html).toContain('3 firmas detectadas');expect(html).toContain('2 anteriores');expect(html).toContain('1 añadida');
+   expect(html).not.toContain('Integridad criptográfica');expect(html).not.toContain('Cadena de confianza');expect(html).toContain('No se verifica la validez');
  });
  it('uses a native disclosure and escapes certificate text without showing unnecessary identifiers',async()=>{
    const html=await render(inventory,signatures);expect(html).toContain('<details');expect(html).toContain('<summary');expect(html).not.toContain('<script>');expect(html).toContain('&lt;script&gt;');expect(html).not.toContain('secret-unneeded-serial');

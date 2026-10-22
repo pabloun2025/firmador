@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import JSONResponse
-from validator.inventory import POLICY
+from validator.detection import POLICY
 
 app=FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
 slots=asyncio.Semaphore(1)

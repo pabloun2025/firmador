@@ -256,11 +256,12 @@ try {
       assert.equal(await flow.locator('.owner-detail').evaluate(node => node.scrollWidth <= node.clientWidth), true);
     });
     await flow.screenshot({ path: `${output}/tracking-review-${width}.png`, fullPage: true });
-    await check(`signature details preserve independent status and fit the viewport (${width})`,async()=>{
+    await check(`detected names fit the viewport without implying validity (${width})`,async()=>{
       const section=flow.getByRole('region',{name:'Firmas digitales de esta versión'});
-      await section.getByText('3 firmas digitales',{exact:true}).waitFor();
+      await section.getByText('3 firmas detectadas',{exact:true}).waitFor();
       await section.getByText('Ver detalles de las firmas',{exact:true}).click();
-      for(const status of ['No evaluada','Desconocida','Vencido'])assert(await section.getByText(status,{exact:true}).isVisible());
+      assert(await section.getByText('Nombre en la firma:',{exact:false}).isVisible());
+      assert.equal(await section.getByText('Integridad verificada',{exact:false}).count(),0);
       assert(await flow.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
       await accessibility(flow,`signature-inventory ${width}`);
       await flow.screenshot({path:`${output}/signature-inventory-${width}.png`,fullPage:true});
@@ -321,9 +322,10 @@ try {
       assert.equal(await signer.locator('input[type=file]').isDisabled(), false);
     });
     await signer.locator('input[type=file]').setInputFiles({ name: 'otro-documento.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(600) });
-    await check(`unrelated filenames are rejected next to submission (${width})`, async () => {
-      await signer.getByRole('alert').filter({ hasText: 'nombre original' }).waitFor();
-      assert.equal(await signer.getByRole('button', { name: 'Subir PDF firmado y completar mi turno' }).isDisabled(), true);
+    await check(`externally renamed PDFs can be selected (${width})`, async () => {
+      await signer.getByLabel('He revisado el documento').check();
+      assert.equal(await signer.getByRole('button', { name: 'Subir PDF firmado y completar mi turno' }).isDisabled(), false);
+      assert.equal(await signer.getByRole('alert').filter({hasText:'nombre original'}).count(),0);
     });
     await signer.locator('input[type=file]').setInputFiles({ name: 'Contrato de prueba signed.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(600) });
     await signer.getByLabel('He revisado el documento').check();

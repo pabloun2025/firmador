@@ -42,7 +42,7 @@ def test_all_endpoints_require_authentication(client):
 
 
 def test_authenticated_readiness(client):
-    assert client.get('/ready',headers=headers()).json()['policy']=='leapsign-v1.1-integrity-offline-1'
+    assert client.get('/ready',headers=headers()).json()['policy']=='leapsign-v1.1-signature-detection-1'
 
 
 def test_requires_json(client):

@@ -23,6 +23,15 @@ async function fixture(){
  return {report,fetcher,client,loadParent,options:{enabled:true,url:'https://v1-validator.example/validate',token:'synthetic-token-at-least-32-characters',client,ownerId:'owner',parentId:'parent',parentSize:parent.length,parentHash:base,candidate,loadParent,fetch:fetcher}};
 }
 describe('v1 private inventory transport, mocked network not cryptographic proof',()=>{
+ it('accepts a detection-only report without asserting validity',async()=>{
+   const f=await fixture();const report={...f.report,policy:'leapsign-v1.1-signature-detection-1',signatures:f.report.signatures.map(s=>({...s,integrity:'not_evaluated',subsequentChanges:'not_evaluated',certificateValidity:'not_evaluated',coverage:'not_evaluated'}))};
+   f.fetcher.mockImplementation(async()=>Response.json(report));
+   expect(await (await moduleUnderTest()).requestSignatureInventory(f.options)).toEqual(report);
+ });
+ it.each([['NO_NEW_SIGNATURE','Este PDF no incorpora una firma adicional.'],['MULTIPLE_NEW_SIGNATURES','Añade una sola firma por turno.'],['PREVIOUS_SIGNATURE_CHANGED','Este PDF no conserva todas las firmas anteriores.']])('explains detection rejection %s without a generic outage',async(code,message)=>{
+   const f=await fixture();f.fetcher.mockImplementation(async()=>Response.json({accepted:false,code},{status:422}));
+   await expect((await moduleUnderTest()).requestSignatureInventory(f.options)).rejects.toThrow(message);
+ });
  it('has no effect or cost when disabled',async()=>{const f=await fixture();const m=await moduleUnderTest();expect(await m.requestSignatureInventory({...f.options,enabled:false})).toBeNull();expect(f.client.rpc).not.toHaveBeenCalled();expect(f.fetcher).not.toHaveBeenCalled();expect(f.loadParent).not.toHaveBeenCalled();});
  it('reserves capacity before private download and validation',async()=>{const f=await fixture();const m=await moduleUnderTest();expect(await m.requestSignatureInventory(f.options)).toEqual(f.report);expect(f.client.rpc.mock.invocationCallOrder[0]).toBeLessThan(f.loadParent.mock.invocationCallOrder[0]);expect(f.loadParent.mock.invocationCallOrder[0]).toBeLessThan(f.fetcher.mock.invocationCallOrder[0]);});
  it('never calls the validator when shared budget fails',async()=>{const f=await fixture();f.client.rpc.mockResolvedValue({data:{allowed:false},error:null});await expect((await moduleUnderTest()).requestSignatureInventory(f.options)).rejects.toThrow();expect(f.fetcher).not.toHaveBeenCalled();expect(f.loadParent).not.toHaveBeenCalled();});
