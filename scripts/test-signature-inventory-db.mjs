@@ -28,7 +28,7 @@ sql(readFileSync('supabase/migrations/20261013000000_mass_signing.sql', 'utf8'))
 sql(`create table public.open_round_waitlist(workflow_id uuid references workflows,session_hash text,holder_name text,email text,joined_at timestamptz default now(),primary key(workflow_id,session_hash));
 alter table workflow_audit_log add column actor_session_hash text,add column metadata jsonb;
 create table public.round_invitations(id uuid primary key default gen_random_uuid(),workflow_id uuid references workflows on delete cascade,session_hash text,status text default 'opened',expires_at timestamptz default now()+interval '48 hours',completed_at timestamptz);
-create table public.file_cleanup_jobs(workflow_id uuid references workflows,storage_path text unique,reason text,scheduled_for timestamptz,status text default 'pending',completed_at timestamptz);`);
+create table public.file_cleanup_jobs(workflow_id uuid references workflows on delete cascade,storage_path text unique,reason text,scheduled_for timestamptz,status text default 'pending',completed_at timestamptz);`);
 sql(readFileSync('supabase/migrations/20261014060000_signed_chain_foundation.sql', 'utf8'));
 sql(`alter table document_versions add column submitted_by_name text,add column submitted_by_email text,add column page_count integer,add column page_dimensions jsonb default '[]',add column delete_after timestamptz,add column discarded_at timestamptz;
 alter table signature_submissions add column page_count integer,add column page_dimensions jsonb default '[]';
@@ -65,6 +65,7 @@ console.log('PASS server feature defaults off');
 sql('update signature_inventory_settings set enabled=true;');
 const c = begin(f);
 assert.equal(c.state, 'reserved');
+assert.match(c.storage_path,/\/submissions\/[a-f0-9-]+\.pdf$/,'keep flat submission files compatible with the existing owner purge');
 assert.throws(() => begin(f), /VALIDATION_IN_PROGRESS/);
 assert.throws(() => sql(commitSql(c,{...report(),signedSha256:a})), /INVALID_INVENTORY_REPORT/);
 assert.equal(sql(`select signature_count from workflows where id='${f.id}';`), '0');
@@ -110,6 +111,18 @@ assert.notEqual(renewed.storage_path,old.storage_path);
 assert.throws(() => sql(commitSql(old)), /VALIDATION_LEASE_EXPIRED/);
 assert.equal(JSON.parse(sql(commitSql(renewed))).state,'accepted');
 console.log('PASS expired lease fencing and immutable storage path per attempt');
+const limited=fixture();let limitedTicket=begin(limited);
+for(let n=0;n<2;n++){
+  sql(`update signature_validation_receipts set lease_expires_at=now()-interval '1 second' where id='${limitedTicket.claim_id}';`);
+  limitedTicket=begin(limited);
+}
+sql(`update signature_validation_receipts set lease_expires_at=now()-interval '1 second' where id='${limitedTicket.claim_id}';`);
+assert.throws(()=>begin(limited),/VALIDATION_ATTEMPTS_EXHAUSTED/);
+// A later legitimate turn must not remain permanently blocked by a prior
+// participant's failed attempts. Global validation budgets still apply in Edge.
+sql(`update open_round_locks set created_at=now() where workflow_id='${limited.id}';`);
+assert.equal(begin(limited).state,'reserved');
+console.log('PASS three-attempt limit per turn does not permanently block a new turn');
 const interrupted=fixture(), interruptedTicket=begin(interrupted);
 sql(`create function test_inventory_failure() returns trigger language plpgsql as $$ begin raise exception 'SYNTHETIC_PERSISTENCE_FAILURE'; end $$;
 create trigger test_failure before insert on version_pdf_signatures for each row execute function test_inventory_failure();`);
@@ -150,3 +163,7 @@ console.log('PASS six real concurrent PostgreSQL commits produce one version and
 sql('update signature_inventory_settings set enabled=false;');
 assert.equal(call('accept_open_signed_submission', `'${bypass.id}','${session}','${submission}'`).ok,true);
 console.log('PASS feature disabled preserves existing v1 acceptance');
+sql(`delete from workflows where id='${f.id}';`);
+assert.equal(sql(`select count(*) from signature_validation_receipts where workflow_id='${f.id}';`),'0');
+assert.equal(sql(`select count(*) from version_pdf_signatures where workflow_id='${f.id}';`),'0');
+console.log('PASS intentional owner process purge cascades without immutable-trigger interference');

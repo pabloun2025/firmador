@@ -16,6 +16,7 @@ create table public.signature_validation_receipts (
   state text not null default 'reserved' check (state in ('reserved','validating','accepted')),
   lease_token uuid not null default gen_random_uuid(),
   lease_expires_at timestamptz not null default now()+interval '120 seconds',
+  turn_created_at timestamptz not null,
   attempts smallint not null default 1 check (attempts between 1 and 3),
   storage_path text not null unique,
   invitation_id uuid references public.round_invitations(id) on delete set null,
@@ -119,19 +120,20 @@ begin
   if r.id is not null then
     if r.state='accepted' then raise exception 'TURN_UNAVAILABLE'; end if;
     if r.lease_expires_at>now() then raise exception 'VALIDATION_IN_PROGRESS'; end if;
-    if r.attempts>=3 then raise exception 'VALIDATION_ATTEMPTS_EXHAUSTED'; end if;
+    if r.attempts>=3 and r.turn_created_at=l.created_at then raise exception 'VALIDATION_ATTEMPTS_EXHAUSTED'; end if;
     -- A previous path may contain an upload with uncertain outcome. Retain it in
     -- bounded cleanup, never overwrite or delete a possibly accepted object.
     insert into public.file_cleanup_jobs(workflow_id,storage_path,reason,scheduled_for)
       values(p_workflow_id,r.storage_path,'validation_lease_expired',now()+interval '48 hours') on conflict(storage_path) do nothing;
     update public.signature_validation_receipts set session_hash=p_session_hash,signed_sha256=p_signed_sha256,byte_size=p_byte_size,
-      state='reserved',lease_token=lease,lease_expires_at=now()+interval '120 seconds',attempts=attempts+1,report=null,invitation_id=invitation.id,
-      storage_path=p_workflow_id||'/submissions/'||claim_id||'/'||lease||'.pdf'
+      state='reserved',lease_token=lease,lease_expires_at=now()+interval '120 seconds',
+      attempts=case when r.turn_created_at=l.created_at then r.attempts+1 else 1 end,turn_created_at=l.created_at,report=null,invitation_id=invitation.id,
+      storage_path=p_workflow_id||'/submissions/'||claim_id||'-'||lease||'.pdf'
       where id=claim_id returning * into r;
   else
-    insert into public.signature_validation_receipts(id,workflow_id,parent_version_id,session_hash,base_sha256,signed_sha256,byte_size,lease_token,storage_path,invitation_id)
+    insert into public.signature_validation_receipts(id,workflow_id,parent_version_id,session_hash,base_sha256,signed_sha256,byte_size,lease_token,storage_path,invitation_id,turn_created_at)
       values(claim_id,p_workflow_id,p_parent_id,p_session_hash,parent.sha256,p_signed_sha256,p_byte_size,lease,
-        p_workflow_id||'/submissions/'||claim_id||'/'||lease||'.pdf',invitation.id) returning * into r;
+        p_workflow_id||'/submissions/'||claim_id||'-'||lease||'.pdf',invitation.id,l.created_at) returning * into r;
   end if;
   -- Bounded quarantine cleanup even if the uploader never retries. Commit removes
   -- this job atomically before the object becomes an accepted version.
