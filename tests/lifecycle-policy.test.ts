@@ -36,8 +36,10 @@ describe("coherent signing lifecycle", () => {
     expect(submit).not.toContain("debe pesar más que la versión anterior");
   });
 
-  it("does not block externally renamed signed PDFs", () => {
-    expect(submit).not.toContain("validateRelatedDocumentName");
+  it("rejects an unrelated upload filename on the server", () => {
+    expect(submit).toContain("validateRelatedDocumentName");
+    expect(names).toContain("El nombre del archivo que intentas subir no corresponde al nombre original");
+    expect(names).toContain(">= 0.70");
     expect(download).toContain("expectedFilename");
   });
 

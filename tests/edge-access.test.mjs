@@ -27,7 +27,6 @@ beforeEach(async () => {
       const query = {
         select() { return query; }, order() { return query; }, limit() { return query; },
         eq(key, value) { filters.push(row => row[key] === value); return query; },
-        in(key, values) { filters.push(row => values.includes(row[key])); return query; },
         is(key, value) { filters.push(row => row[key] === value); return query; },
         update() { updating = true; return query; },
         maybeSingle() { single = true; return query; },
@@ -81,18 +80,6 @@ it('verifies the owner once per tracking refresh instead of duplicating Auth tra
   const response = await handler(request({ id }));
   expect(response.status).toBe(200);
   expect(authCalls).toBe(1);
-});
-it('returns only the authenticated workflow retained signature inventories', async()=>{
-  tables.version_signature_inventories=[{workflow_id:id,version_id:versionId,signature_count:1},{workflow_id:'other-round',version_id:versionId,signature_count:99}];
-  tables.version_pdf_signatures=[{workflow_id:id,version_id:versionId,signature_id:'a'.repeat(64),record:{integrity:'valid'}},{workflow_id:id,version_id:'discarded-version',signature_id:'b'.repeat(64),record:{integrity:'valid'}}];
-  await import('../supabase/functions/get-owner-round/index.ts');
-  const response=await handler(request({id}));const data=await response.json();
-  expect(response.status).toBe(200);expect(data.signatureInventories).toHaveLength(1);expect(data.pdfSignatures).toHaveLength(1);
-  expect(response.headers.get('cache-control')).toBe('no-store');
-});
-it('does not label an unavailable inventory as an empty signature list',async()=>{
-  failingTable='version_pdf_signatures';await import('../supabase/functions/get-owner-round/index.ts');
-  const response=await handler(request({id}));expect(response.status).toBe(503);expect(await response.json()).not.toHaveProperty('pdfSignatures');
 });
 it('does not issue a PDF URL outside an active turn', async () => {
   tables.open_round_locks[0].expires_at = '2020-01-01T00:00:00Z';

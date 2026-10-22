@@ -43,10 +43,6 @@ function mockProcess(context) {
   const state = { created: false, signatures: 0, status: 'active', waiting: false, denySubmit: false, failTracking: false, sent: 0, downloads: 0, actions: [] };
   const contacts = Array.from({ length: 12 }, (_, index) => ({ id: `contact-${index}`, display_name: `Persona ${String(index + 1).padStart(2, '0')}`, email: `persona${index + 1}@example.test` }));
   const workflow = () => ({ id: workflowId, title: 'Contrato de prueba', status: state.status, signature_count: state.signatures, expected_signature_count: 2, created_at: '2026-10-19T08:00:00Z', current_version_id: `version-${state.signatures}`, message: '' });
-  const inventory = () => state.signatures ? {
-    signatureInventories:[{version_id:`version-${state.signatures}`,signature_count:3,inherited_count:2,added_signature_id:'c'.repeat(64),policy:'leapsign-v1.1-integrity-offline-1'}],
-    pdfSignatures:[{version_id:`version-${state.signatures}`,signature_id:'c'.repeat(64),record:{field:'Signature_3',declaredSigningTime:null,certificate:{subject:'Titular sintético con nombre largo para comprobar la presentación en pantallas pequeñas',issuer:'Entidad sintética de pruebas'},algorithms:{digest:'sha256',signature:'ecdsa'},integrity:'valid',trust:'not_evaluated',revocation:'unknown',certificateValidity:'expired'}}],
-  } : {signatureInventories:[],pdfSignatures:[]};
   const setup = async () => {
     await context.route('**/rest/v1/**', route => route.fulfill({ json: route.request().url().includes('owner_contacts') ? contacts : state.created ? [workflow()] : [] }));
     await context.route('**/functions/v1/**', async route => {
@@ -57,7 +53,7 @@ function mockProcess(context) {
       if (slug === 'send-round-invitations') { state.sent += payload.recipients.length; return route.fulfill({ json: { sent: payload.recipients.length, skipped: 0, completed: 0, failed: [], remaining: 2 - state.sent } }); }
       if (slug === 'get-owner-round') {
         if (state.failTracking) return route.fulfill({ status: 503, json: { error: 'Synthetic database unavailable' } });
-        return route.fulfill({ json: { workflow: workflow(), activeTurn: null, queue: [], reports: [], events: [], submissions: [], contacts, invitations: [],...inventory(), versions: [{ id: `version-${state.signatures}`, sequence: state.signatures, sha256:'a'.repeat(64), byte_size: 700, created_at: '2026-10-19T08:00:00Z', submitted_by_name: 'Ana Prueba', submitted_by_email: 'ana@example.test', validation_status: 'accepted' }] } });
+        return route.fulfill({ json: { workflow: workflow(), activeTurn: null, queue: [], reports: [], events: [], submissions: [], contacts, invitations: [], versions: [{ id: `version-${state.signatures}`, sequence: state.signatures, byte_size: 700, created_at: '2026-10-19T08:00:00Z', submitted_by_name: 'Ana Prueba', submitted_by_email: 'ana@example.test', validation_status: 'accepted' }] } });
       }
       if (slug === 'owner-round-action') { state.actions.push(payload.action); if (payload.action === 'finalize') state.status = 'completed'; return route.fulfill({ json: { ok: true } }); }
       if (slug === 'owner-download-version') return route.fulfill({ json: { url: 'https://files.example.test/final.pdf' } });
@@ -256,16 +252,6 @@ try {
       assert.equal(await flow.locator('.owner-detail').evaluate(node => node.scrollWidth <= node.clientWidth), true);
     });
     await flow.screenshot({ path: `${output}/tracking-review-${width}.png`, fullPage: true });
-    await check(`detected names fit the viewport without implying validity (${width})`,async()=>{
-      const section=flow.getByRole('region',{name:'Firmas digitales de esta versión'});
-      await section.getByText('3 firmas detectadas',{exact:true}).waitFor();
-      await section.getByText('Ver detalles de las firmas',{exact:true}).click();
-      assert(await section.getByText('Nombre en la firma:',{exact:false}).isVisible());
-      assert.equal(await section.getByText('Integridad verificada',{exact:false}).count(),0);
-      assert(await flow.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
-      await accessibility(flow,`signature-inventory ${width}`);
-      await flow.screenshot({path:`${output}/signature-inventory-${width}.png`,fullPage:true});
-    });
     await flow.getByRole('button', { name: 'Descargar PDF actual', exact: true }).click();
     await flow.getByLabel('He revisado el PDF').check();
     flow.on('dialog', dialog => dialog.accept());
@@ -322,10 +308,9 @@ try {
       assert.equal(await signer.locator('input[type=file]').isDisabled(), false);
     });
     await signer.locator('input[type=file]').setInputFiles({ name: 'otro-documento.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(600) });
-    await check(`externally renamed PDFs can be selected (${width})`, async () => {
-      await signer.getByLabel('He revisado el documento').check();
-      assert.equal(await signer.getByRole('button', { name: 'Subir PDF firmado y completar mi turno' }).isDisabled(), false);
-      assert.equal(await signer.getByRole('alert').filter({hasText:'nombre original'}).count(),0);
+    await check(`unrelated filenames are rejected next to submission (${width})`, async () => {
+      await signer.getByRole('alert').filter({ hasText: 'nombre original' }).waitFor();
+      assert.equal(await signer.getByRole('button', { name: 'Subir PDF firmado y completar mi turno' }).isDisabled(), true);
     });
     await signer.locator('input[type=file]').setInputFiles({ name: 'Contrato de prueba signed.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(600) });
     await signer.getByLabel('He revisado el documento').check();

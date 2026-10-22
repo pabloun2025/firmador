@@ -28,15 +28,7 @@ Deno.serve(protectEndpoint("get-owner-round", createClient, async (request, cont
     ]);
     assertQuerySuccess(results);
     const [{ data: versions }, { data: lock }, { data: queue }, { data: reports }, { data: events }, { data: submissions }, { data: contacts }, { data: invitations }] = results;
-    // Ownership was checked above. Never take an owner, inventory or certificate
-    // from browser input. Bound queries to the retained versions of this workflow.
-    const versionIds=(versions??[]).map(version=>version.id);
-    const inventoryResults=versionIds.length?await Promise.all([
-      admin.from('version_signature_inventories').select('version_id,signature_count,inherited_count,added_signature_id,policy,relationship,created_at').eq('workflow_id',id).in('version_id',versionIds).limit(21),
-      admin.from('version_pdf_signatures').select('version_id,signature_id,record').eq('workflow_id',id).in('version_id',versionIds).limit(1344),
-    ]):[];
-    assertQuerySuccess(inventoryResults);
-    return Response.json({ workflow, activeTurn: lock ?? null, queue: queue ?? [], versions: versions ?? [], reports: reports ?? [], events: events ?? [], submissions: submissions ?? [], contacts: contacts ?? [], invitations: invitations ?? [],signatureInventories:inventoryResults[0]?.data??[],pdfSignatures:inventoryResults[1]?.data??[] }, { headers: {...cors,'Cache-Control':'no-store'} });
+    return Response.json({ workflow, activeTurn: lock ?? null, queue: queue ?? [], versions: versions ?? [], reports: reports ?? [], events: events ?? [], submissions: submissions ?? [], contacts: contacts ?? [], invitations: invitations ?? [] }, { headers: cors });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: error instanceof DataUnavailableError ? error.status : 400, headers: cors });
   }

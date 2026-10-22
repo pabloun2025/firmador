@@ -1,8 +1,7 @@
 import { protectEndpoint, budgetedFetch, reserveUpload } from "../_shared/economic-guard.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { comparePdfProfiles, inspectPdf, validateRelatedSize } from "../_shared/pdf-validation.ts";
-import { InventoryUnavailable, requestSignatureInventory } from "../_shared/signature-inventory.ts";
-import { submitValidatedVersion } from "../_shared/validated-submission.ts";
+import { validateRelatedDocumentName } from "../_shared/document-name.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -108,18 +107,6 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     const sessionHash = await hashText(sessionId);
-    const digest = await hash(bytes);
-    const inventoryFlag = await admin.from("signature_inventory_settings").select("enabled").eq("singleton",true).single();
-    if (inventoryFlag.error || !inventoryFlag.data) throw new InventoryUnavailable();
-    // Session capability + exact candidate hash recovers a lost success response,
-    // before workflow/group-key/turn checks that can legitimately have changed.
-    const previousReceipt = await admin.rpc("get_signature_receipt", {
-      p_workflow_id:id,p_session_hash:sessionHash,p_signed_sha256:digest,
-    });
-    if (previousReceipt.error) throw new InventoryUnavailable();
-    if (previousReceipt.data?.state === "accepted") {
-      return Response.json(previousReceipt.data,{headers:{...cors,"Cache-Control":"no-store"}});
-    }
     const { data: workflow } = await admin
       .from("workflows")
       .select("id,owner_id,status,group_key_hash,current_version_id,title,original_filename")
@@ -149,6 +136,7 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       throw new Error(
         "Hay una versión más reciente del documento. Vuelve a abrir tu turno.",
       );
+    validateRelatedDocumentName(workflow.original_filename || `${workflow.title}.pdf`, document.name);
     const { data: parent } = await admin
       .from("document_versions")
       .select("sha256,byte_size,storage_path,page_count,page_dimensions")
@@ -156,36 +144,11 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       .maybeSingle();
     if (!parent)
       throw new Error("No encontramos la versión actual del documento.");
+    const digest = await hash(bytes);
     if (digest === parent.sha256)
       throw new Error(
         "El archivo es igual a la versión anterior. Descarga el PDF, fírmalo y vuelve a cargar la copia resultante.",
       );
-    const candidateProfile = await inspectPdf(bytes);
-    if (inventoryFlag.data.enabled) {
-      if (Deno.env.get("PDF_SIGNATURE_INVENTORY_ENABLED") !== "true") throw new InventoryUnavailable();
-      const receipt = await submitValidatedVersion({
-        client:admin,workflowId:id,sessionHash,parentId:workflow.current_version_id,
-        digest,bytes,profile:candidateProfile,
-        reserveUpload:()=>reserveUpload(admin,document.size,workflow.owner_id),
-        validate:async()=>{
-          const report = await requestSignatureInventory({
-            enabled:true,url:Deno.env.get("V1_PDF_VALIDATOR_URL"),token:Deno.env.get("V1_PDF_VALIDATOR_TOKEN"),
-            client:admin,ownerId:workflow.owner_id,parentId:workflow.current_version_id,
-            parentSize:Number(parent.byte_size),parentHash:parent.sha256,candidate:bytes,
-            loadParent:async()=>{
-              const result = await admin.storage.from("firmador-documents").download(parent.storage_path);
-              if(result.error || !result.data)throw new InventoryUnavailable();
-              const parentBytes = new Uint8Array(await result.data.arrayBuffer());
-              return parentBytes;
-            },
-          });
-          if(!report)throw new InventoryUnavailable();
-          return report;
-        },
-      });
-      await Promise.allSettled([notifyOwnerWhenComplete(admin,id)]);
-      return Response.json(receipt,{headers:{...cors,"Cache-Control":"no-store"}});
-    }
     validateRelatedSize(Number(parent.byte_size), document.size);
     let parentProfile;
     if (parent.page_count && Array.isArray(parent.page_dimensions) && parent.page_dimensions.length) {
@@ -195,6 +158,7 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       if (parentDownloadError || !parentBlob) throw new Error("No pudimos comprobar el documento vigente.");
       parentProfile = await inspectPdf(new Uint8Array(await parentBlob.arrayBuffer()));
     }
+    const candidateProfile = await inspectPdf(bytes);
     comparePdfProfiles(parentProfile, candidateProfile);
     let submissionId: string;
     const { data: existing } = await admin

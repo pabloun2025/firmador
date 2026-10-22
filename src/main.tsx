@@ -3,12 +3,11 @@ import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
-import { documentFilename } from "./lib/document-name";
+import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
 import { QueueArcade } from "./components/QueueArcade";
 import { FinalDocument, FinalShareCard } from "./components/FinalDocument";
-import { SignatureInventory } from "./components/SignatureInventory";
 import "./styles.css";
 import "./round.css";
 import "./redesign.css";
@@ -823,10 +822,15 @@ function RoundAccess({ id }: { id: string }) {
                       disabled={!downloaded}
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null;
-                        if (file && file.size > 10 * 1024 * 1024) {
+                        if (file && expectedFilename && !isRelatedDocumentName(expectedFilename, file.name)) {
                           setSignedDocument(null);
                           setNoticeTarget("submission"); setNoticeTone("error");
-                          setNotice("El PDF debe pesar como máximo 10 MB.");
+                          setNotice("El nombre del archivo que intentas subir no corresponde al nombre original.");
+                          e.target.value = "";
+                        } else if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
+                          setSignedDocument(null);
+                          setNoticeTarget("submission"); setNoticeTone("error");
+                          setNotice("Este archivo tiene un tamaño muy distinto al PDF descargado. Comprueba que seleccionaste el documento correcto.");
                           e.target.value = "";
                         } else setSignedDocument(file);
                       }}
@@ -1469,7 +1473,6 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                   {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
                 </span>
               </div>
-              <SignatureInventory hash={currentVersion.sha256} inventory={selected.signatureInventories?.find((entry:any)=>entry.version_id===currentVersion.id)} signatures={selected.pdfSignatures?.filter((entry:any)=>entry.version_id===currentVersion.id)} />
               {canClose && (
                 <div className="final-approval">
                   <div className="final-approval-title">
@@ -1580,16 +1583,15 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               onSent={() => { void openRound(selected.workflow.id); }}
             />
           </section>}
-          <section className="tracking-history" aria-label="Versiones y firmas">
+          <section className="tracking-history" aria-label="Historial de versiones">
             {previousVersions.length > 0 && <details className="history-disclosure">
-              <summary>Versiones y firmas anteriores <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
+              <summary>Historial de versiones <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
               <ul className="submission-list">
                 {previousVersions.map((version: any) => (
                   <li key={version.id}>
                     <strong>Versión {version.sequence}</strong>
                     <span>{Math.ceil(version.byte_size / 1024)} KB · {new Date(version.created_at).toLocaleString()}</span>
                     <span className="version-author">Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}</span>
-                    <SignatureInventory hash={version.sha256} inventory={selected.signatureInventories?.find((entry:any)=>entry.version_id===version.id)} signatures={selected.pdfSignatures?.filter((entry:any)=>entry.version_id===version.id)} />
                     {version.delete_after && <span>Disponible hasta {new Date(version.delete_after).toLocaleString()}</span>}
                     <div className="version-actions">
                       <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
