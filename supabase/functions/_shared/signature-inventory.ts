@@ -50,7 +50,9 @@ export async function requestSignatureInventory(options:Options):Promise<Invento
     await reserveDownload(options.client,options.parentId,options.parentSize);
     const parent=await options.loadParent();
     if(parent.length!==options.parentSize||await digest(parent)!==options.parentHash)throw new InventoryUnavailable('PARENT_HASH_MISMATCH');
-    const signed=await digest(options.candidate),signal=AbortSignal.timeout(25000);
+    // Free Render may need 50+ seconds to start. One bounded request, no hidden
+    // retries or keep-alive pings; the worker's crypto deadline remains 20 s.
+    const signed=await digest(options.candidate),signal=AbortSignal.timeout(90000);
     const response=await (options.fetch??fetch)(url.href,{method:'POST',redirect:'error',cache:'no-store',signal,
       headers:{Authorization:`Bearer ${options.token}`,'Content-Type':'application/json'},
       body:JSON.stringify({previous:base64(parent),candidate:base64(options.candidate),baseSha256:options.parentHash})});
