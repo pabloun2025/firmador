@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readSignatureProgress } from "../supabase/functions/_shared/signature-names";
-import { signatureReadout } from "../src/lib/signature-progress";
+import { signatureHeadline, signatureReadout } from "../src/lib/signature-progress";
 
 const pdf = (body: string) => new TextEncoder().encode(`%PDF-1.7\n${body}\n%%EOF`);
 const contents = (hex: string) => `/Contents <${hex}>`;
@@ -63,5 +63,20 @@ describe("signature name reading", () => {
     expect(progress.status).toBe("detected");
     expect(progress.names).toEqual(["Ana Perez"]);
     expect(signatureReadout(progress)).toBe("Firmas detectadas: Ana Perez. Nueva: Ana Perez.");
+  });
+
+  it("writes a readable headline for the current signer", () => {
+    expect(signatureHeadline({ status: "detected", names: ["Ana Perez"], addedNames: ["Ana Perez"] })).toEqual({
+      name: "Ana Perez",
+      note: "Nombre leído del PDF. LeapSign no certifica la firma.",
+    });
+    expect(signatureHeadline({ status: "detected", names: ["Ana Perez", "Luis Mora"], addedNames: ["Luis Mora"] })).toEqual({
+      name: "Luis Mora",
+      note: "En el PDF figuran: Ana Perez, Luis Mora.",
+    });
+    expect(signatureHeadline({ status: "no_new_signature", names: ["Ana Perez"], addedNames: [] })?.name).toBe("Ana Perez");
+    expect(signatureHeadline({ status: "no_new_signature", names: [], addedNames: [] })?.name).toBe("Sin firma nueva");
+    expect(signatureHeadline({ status: "unreadable" })?.name).toBe("No se pudieron leer las firmas");
+    expect(signatureHeadline(null)).toBeNull();
   });
 });

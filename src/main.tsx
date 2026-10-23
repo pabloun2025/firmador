@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
 import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
-import { signatureReadout } from "./lib/signature-progress";
+import { signatureHeadline } from "./lib/signature-progress";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
 import { QueueArcade } from "./components/QueueArcade";
@@ -1200,6 +1200,10 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
   const [notice, setNotice] = useState("");
   const [finalConfirmed, setFinalConfirmed] = useState(false);
   const [reviewedVersionId, setReviewedVersionId] = useState("");
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const previewUrl = useRef("");
+  const previewClose = useRef<HTMLButtonElement>(null);
   const [actionPending, setActionPending] = useState(false);
   const [lastTrackingRefresh, setLastTrackingRefresh] = useState<Date | null>(null);
   const [trackingError, setTrackingError] = useState("");
@@ -1329,14 +1333,65 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
       setNotice("No pudimos confirmar el cambio. Actualiza el seguimiento para comprobar el estado antes de intentarlo de nuevo.");
     } finally { setActionPending(false); }
   }
-  async function downloadVersion(versionId?: string) {
-    if (!selected) return;
+  function closePreview() {
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    previewUrl.current = "";
+    setPreview(null);
+  }
+  useEffect(() => () => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
+  useEffect(() => {
+    if (!preview) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    previewClose.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closePreview(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [preview]);
+  async function versionUrl(versionId?: string) {
+    if (!selected) return "";
     const s = await getSupabase();
     const { data, error } = await s.functions.invoke("owner-download-version", {
       body: { id: selected.workflow.id, versionId },
     });
-    if (error || !data?.url) setNotice("No pudimos preparar la descarga.");
-    else { setReviewedVersionId(versionId ?? selected.workflow.current_version_id); setFinalConfirmed(false); window.open(data.url, "_blank", "noopener"); }
+    if (error || !data?.url) {
+      setNotice("No pudimos preparar el PDF.");
+      return "";
+    }
+    const reviewed = versionId ?? selected.workflow.current_version_id;
+    if (reviewed === selected.workflow.current_version_id) {
+      setReviewedVersionId(reviewed);
+      setFinalConfirmed(false);
+    }
+    return String(data.url);
+  }
+  async function downloadVersion(versionId?: string) {
+    const url = await versionUrl(versionId);
+    if (url) window.open(url, "_blank", "noopener");
+  }
+  async function previewVersion(versionId?: string) {
+    if (!selected || previewBusy) return;
+    const workflowTitle = selected.workflow.title;
+    const version = selected.versions.find((item: { id: string }) => item.id === (versionId ?? selected.workflow.current_version_id));
+    setPreviewBusy(true);
+    setNotice("");
+    try {
+      const url = await versionUrl(versionId);
+      if (!url) return;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("preview");
+      const objectUrl = URL.createObjectURL(new Blob([await response.arrayBuffer()], { type: "application/pdf" }));
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      previewUrl.current = objectUrl;
+      setPreview({ url: objectUrl, title: `Versión ${version?.sequence ?? 0} · ${documentFilename(workflowTitle)}` });
+    } catch {
+      setNotice("No pudimos mostrar el PDF aquí. Puedes descargarlo.");
+    } finally {
+      setPreviewBusy(false);
+    }
   }
   const statusText = (status: string) =>
     status === "active"
@@ -1354,8 +1409,15 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
   const previousVersions = selected?.versions.filter(
     (version: any) => version.id !== selected.workflow.current_version_id,
   ).sort((a: any, b: any) => b.sequence - a.sequence) ?? [];
-  useEffect(() => { setFinalConfirmed(false); setReviewedVersionId(""); }, [selected?.workflow?.id, currentVersion?.id]);
   const goalReached = selected?.workflow.expected_signature_count != null && selected.workflow.signature_count >= selected.workflow.expected_signature_count;
+  const currentHeadline = signatureHeadline(currentVersion?.signatures);
+  const trackingLead = !selected ? ""
+    : selected.workflow.status === "completed" ? "Este proceso está cerrado. Conserva el PDF final."
+    : selected.workflow.status === "paused_error" ? "El proceso está detenido. Puedes reanudarlo en Opciones del proceso."
+    : selected.activeTurn ? `${selected.activeTurn.holder_name} está firmando ahora. Puedes esperar, o cerrar si ya no quieres más firmas.`
+    : goalReached ? "Ya llegaron las firmas que pediste. Revisa el PDF y ciérralo si te sirve."
+    : "Revisa el PDF vigente. Puedes seguir recibiendo firmas o cerrar el proceso con esta versión.";
+  useEffect(() => { setFinalConfirmed(false); setReviewedVersionId(""); }, [selected?.workflow?.id, currentVersion?.id]);
   const canClose = ["active", "paused_error"].includes(selected?.workflow.status);
   const activeRounds = rounds.filter((round) =>
     round.status === "active" || round.status === "paused_error",
@@ -1454,69 +1516,47 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               {selected.workflow.expected_signature_count > 0 && <progress className="signature-progress" aria-label="Firmas recibidas" max={selected.workflow.expected_signature_count} value={selected.workflow.signature_count} />}
             </div>
           </div>
-          {focusOnly && <section className="tracking-guidance">
-            <span className="section-kicker">Próximo paso</span>
-            <h4>{selected.workflow.status === "completed" ? "Descarga y conserva el documento final" : selected.workflow.status === "paused_error" ? "Resuelve la incidencia para continuar" : goalReached ? "Todas las firmas previstas se han recibido" : selected.activeTurn ? "Una persona está firmando ahora" : selected.queue.length ? "La cola avanza automáticamente" : reservedInvitationCount ? "Esperando las firmas pendientes" : "Comparte el enlace para recibir firmas"}</h4>
-            <p>{selected.workflow.status === "completed" ? `La copia final estará disponible hasta ${selected.workflow.final_file_delete_at ? new Date(selected.workflow.final_file_delete_at).toLocaleString() : "cinco días después del cierre"}.` : selected.workflow.status === "paused_error" ? "Revisa las incidencias y reanuda desde Opciones del proceso cuando esté resuelto." : goalReached ? "Descarga el PDF más reciente, revisa las firmas y acéptalo como final cuando estés conforme." : selected.activeTurn ? "No necesitas hacer nada. Si el turno vence, quedará disponible para la siguiente persona." : selected.queue.length ? "Puedes revisar abajo quién espera y actuar solo si alguien informa una incidencia." : reservedInvitationCount ? "Las personas invitadas todavía pueden incorporarse. Consulta sus estados abajo." : "Vuelve a Compartir para copiar el enlace o enviar invitaciones."}</p>
-          </section>}
+          <p className="tracking-lead">{trackingLead}</p>
           <section className="tracking-section version-section" aria-label="PDF actual">
-            <header className="current-pdf-heading"><span className="section-kicker">{selected.workflow.status === "completed" ? "PDF final" : "PDF más reciente"}</span><h4>{documentFilename(selected.workflow.title)}</h4><span>{currentVersion?.sequence === 0 ? "Documento inicial · sin firmas recibidas" : `Versión ${currentVersion?.sequence ?? 0}`}</span></header>
-            <div className="section-action-row"><p>Descarga esta copia para revisar las firmas recibidas.</p><button className="primary" disabled={!currentVersion} onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar PDF actual</button></div>
-            {currentVersion && <article className="current-version-card">
-              <div className="version-summary">
-                <strong>
-                  Versión {currentVersion.sequence}
-                </strong>
-                <span>
-                  {Math.ceil(currentVersion.byte_size / 1024)} KB · {new Date(currentVersion.created_at).toLocaleString()}
-                </span>
-                <span className="version-author">
-                  Cargada por <strong>{currentVersion.submitted_by_name || (currentVersion.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>
-                  {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
-                </span>
-                {signatureReadout(currentVersion.signatures) && <span className="signature-read">{signatureReadout(currentVersion.signatures)}</span>}
+            <header className="current-pdf-heading"><span className="section-kicker">{selected.workflow.status === "completed" ? "PDF final" : "Documento vigente"}</span><h4>{documentFilename(selected.workflow.title)}</h4><span>{currentVersion?.sequence === 0 ? "Documento inicial" : `Versión ${currentVersion?.sequence ?? 0}`}{currentVersion ? ` · ${Math.ceil(currentVersion.byte_size / 1024)} KB` : ""}</span></header>
+            {currentHeadline && <div className={`signer-banner signer-${currentVersion?.signatures?.status ?? "none"}`}><strong>{currentHeadline.name}</strong><p>{currentHeadline.note}</p></div>}
+            {currentVersion && <p className="version-author">Cargada por <strong>{currentVersion.submitted_by_name || (currentVersion.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""} · {new Date(currentVersion.created_at).toLocaleString()}</p>}
+            <div className="pdf-actions">
+              <button className="primary" type="button" disabled={!currentVersion || previewBusy} onClick={() => previewVersion(currentVersion?.id)}>{previewBusy ? "Abriendo…" : "Ver PDF"}</button>
+              <button className="signout" type="button" disabled={!currentVersion} onClick={() => downloadVersion(currentVersion?.id)}><Icon name="download" size={16} /> Descargar</button>
+            </div>
+            {canClose && currentVersion && (
+              <div className="close-choice">
+                <h5>Cerrar las firmas con esta versión</h5>
+                <p>Después nadie más podrá firmar. Si aún esperas a alguien, vuelve a Compartir y deja el proceso abierto.</p>
+                {(selected.activeTurn || (selected.workflow.expected_signature_count != null && !goalReached)) && <p className="closure-warning">{selected.activeTurn ? `Si cierras ahora, termina el turno de ${selected.activeTurn.holder_name}. ` : ""}{selected.workflow.expected_signature_count != null && !goalReached ? `Aún ${selected.workflow.expected_signature_count - selected.workflow.signature_count === 1 ? "falta 1 firma" : `faltan ${selected.workflow.expected_signature_count - selected.workflow.signature_count} firmas`} de las que pediste.` : ""}</p>}
+                {reviewedVersionId !== currentVersion.id && <p>Primero abre el PDF o descárgalo.</p>}
+                <label className="final-confirm">
+                  <input
+                    type="checkbox"
+                    disabled={reviewedVersionId !== currentVersion.id} checked={finalConfirmed}
+                    onChange={(event) => setFinalConfirmed(event.target.checked)}
+                  />
+                  <span><strong>Ya vi este PDF y quiero dejarlo como versión final</strong></span>
+                </label>
+                <button
+                  className="primary final-button"
+                  disabled={actionPending || !finalConfirmed || reviewedVersionId !== currentVersion.id}
+                  onClick={() => manageRound("finalize", currentVersion.id)}
+                >
+                  {actionPending ? "Guardando cambios…" : "Cerrar firmas con esta versión"}
+                </button>
               </div>
-              {canClose && (
-                <div className="final-approval">
-                  <div className="final-approval-title">
-                    <span><Icon name="check" size={17} /></span>
-                    <div>
-                      <strong>Cerrar el proceso con esta versión</strong>
-                      <p>Descarga y revisa el PDF antes de aceptarlo. Después no podrán añadirse más firmas.</p>
-                    </div>
-                  </div>
-                  {(selected.activeTurn || (selected.workflow.expected_signature_count != null && !goalReached)) && <p className="closure-warning">{selected.activeTurn ? "Hay una persona firmando. Si cierras ahora, su turno terminará. " : ""}{selected.workflow.expected_signature_count != null && !goalReached ? `Faltan ${selected.workflow.expected_signature_count - selected.workflow.signature_count} firmas previstas. Solo cierra si has decidido no recibirlas.` : ""}</p>}
-                  {reviewedVersionId !== currentVersion.id && <p>Primero descarga el PDF actual. Después confirma que lo has revisado.</p>}
-                  <label className="final-confirm">
-                    <input
-                      type="checkbox"
-                      disabled={reviewedVersionId !== currentVersion.id} checked={finalConfirmed}
-                      onChange={(event) => setFinalConfirmed(event.target.checked)}
-                    />
-                    <span><strong>He revisado el PDF</strong><small>Confirmo que esta será la versión final del documento.</small></span>
-                  </label>
-                  <button
-                    className="primary final-button"
-                    disabled={actionPending || !finalConfirmed || reviewedVersionId !== currentVersion.id}
-                    onClick={() => manageRound("finalize", currentVersion.id)}
-                  >
-                    {actionPending ? "Guardando cambios…" : "Aceptar PDF final y cerrar firmas"}
-                  </button>
-                </div>
-              )}
-            </article>}
+            )}
             {currentVersion?.delete_after && <p className="pdf-expiry">Disponible hasta {new Date(currentVersion.delete_after).toLocaleString()}.</p>}
-            <aside className="retention-note">
-              <Icon name="clock" size={18} />
-              <div>
-                <strong>Conservación y plazos</strong>
-                <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a las 48 horas o al completar la firma. Cada versión sustituida permanece disponible para ti hasta 48 horas; al cerrar el proceso, el PDF final se conserva durante 5 días.</p>
-              </div>
-            </aside>
+            <details className="retention-disclosure">
+              <summary>Plazos y conservación <Icon name="chevron" size={17} /></summary>
+              <p>Los turnos duran 10 minutos y las invitaciones privadas caducan a las 48 horas o al completar la firma. Cada versión sustituida permanece disponible para ti hasta 48 horas; al cerrar el proceso, el PDF final se conserva durante 5 días.</p>
+            </details>
             <Notice message={notice} />
           </section>
           {selected.workflow.status === "completed" && <FinalShareCard workflowId={selected.workflow.id} />}
-          <dl>
+          {!focusOnly && <dl>
             <div>
               <dt>Turno actual</dt>
               <dd>
@@ -1533,7 +1573,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                   : "Sin personas esperando"}
               </dd>
             </div>
-          </dl>
+          </dl>}
           {focusOnly && selected.invitations?.length > 0 && <details className="tracking-section invitation-statuses">
             <summary><span><span className="section-kicker">Invitaciones</span><strong>Estado de los participantes</strong></span><span>{selected.invitations.length}</span><Icon name="chevron" size={17} /></summary>
             {exceedsSignerCapacity && <p className="capacity-warning"><strong>Hay más invitaciones que plazas de firma.</strong> Este proceso se creó antes de aplicar el límite. Solo podrán completar la firma las primeras personas que cubran las {selected.workflow.expected_signature_count} plazas.</p>}
@@ -1590,19 +1630,23 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
             {previousVersions.length > 0 && <details className="history-disclosure">
               <summary>Historial de versiones <span>{previousVersions.length}</span><Icon name="chevron" size={17} /></summary>
               <ul className="submission-list">
-                {previousVersions.map((version: any) => (
+                {previousVersions.map((version: any) => {
+                  const headline = signatureHeadline(version.signatures);
+                  return (
                   <li key={version.id}>
                     <strong>Versión {version.sequence}</strong>
                     <span>{Math.ceil(version.byte_size / 1024)} KB · {new Date(version.created_at).toLocaleString()}</span>
                     <span className="version-author">Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}</span>
-                    {signatureReadout(version.signatures) && <span className="signature-read">{signatureReadout(version.signatures)}</span>}
+                    {headline && <span className="signature-read"><strong>{headline.name}</strong> {headline.note}</span>}
                     {version.delete_after && <span>Disponible hasta {new Date(version.delete_after).toLocaleString()}</span>}
                     <div className="version-actions">
-                      <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
+                      <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => previewVersion(version.id)}>Ver</button>
+                      <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => downloadVersion(version.id)}>Descargar</button>
                       <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => manageRound("rollback", version.id)}>Recuperar esta versión</button>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </details>}
           </section>
@@ -1660,6 +1704,16 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
               </ul>
             </section>
           )}
+          {preview && <div className="pdf-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title">
+            <div className="pdf-preview-bar">
+              <strong id="pdf-preview-title">{preview.title}</strong>
+              <div>
+                <a className="signout" href={preview.url} target="_blank" rel="noreferrer">Abrir en otra pestaña</a>
+                <button ref={previewClose} type="button" className="primary" onClick={closePreview}>Cerrar</button>
+              </div>
+            </div>
+            <iframe title={preview.title} src={preview.url} />
+          </div>}
         </div>
       )}
       {!selected && <Notice message={notice} />}
