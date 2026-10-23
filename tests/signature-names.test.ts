@@ -44,4 +44,24 @@ describe("signature name reading", () => {
     expect(progress.status).toBe("unreadable");
     expect(signatureReadout(progress)).toBe("No se pudieron leer las firmas de este PDF.");
   });
+
+  it("reads the person named in a FirmaEC dictionary after an unmatched parenthesis", async () => {
+    const commonName = (value: string) => {
+      const encoded = [...new TextEncoder().encode(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      return `06035504030c${value.length.toString(16).padStart(2, "0")}${encoded}`;
+    };
+    const cms = `${commonName("AUTORIDAD DE CERTIFICACION RAIZ")}${commonName("Ana Perez")}${"ab".repeat(40)}`;
+    const noise = `%PDF-1.7\n1 0 obj\n<< /Length 8 >>\nstream\n(${"A".repeat(40)}\nendstream\nendobj\n`;
+    const slot = "000000";
+    const head = `${noise}2 0 obj\n<< /ByteRange [0 ${slot} ${slot} ${slot}] /ContactInfo()/Contents `;
+    const body = `<${cms}>`;
+    const tail = " /Filter/Adobe.PPKLite/SubFilter/adbe.pkcs7.detached/Type/Sig>>\nendobj\n%%EOF";
+    const start = head.length;
+    const end = start + body.length;
+    const file = `${noise}2 0 obj\n<< /ByteRange [0 ${String(start).padStart(6, "0")} ${String(end).padStart(6, "0")} ${String(tail.length).padStart(6, "0")}] /ContactInfo()/Contents ${body}${tail}`;
+    const progress = await readSignatureProgress(new TextEncoder().encode(file));
+    expect(progress.status).toBe("detected");
+    expect(progress.names).toEqual(["Ana Perez"]);
+    expect(signatureReadout(progress)).toBe("Firmas detectadas: Ana Perez. Nueva: Ana Perez.");
+  });
 });
