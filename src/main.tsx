@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
 import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
+import { signatureReadout } from "./lib/signature-progress";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
 import { QueueArcade } from "./components/QueueArcade";
@@ -152,6 +153,7 @@ function Brand() {
         <span className="brand-name">LeapSign</span>
       </a>
       <span className="brand-tagline">Firma secuencial de PDF</span>
+      {window.location.hostname === "prueba.veryfacil.org" && <span className="preview-ribbon">Versión de prueba. La web en firma.veryfacil.org sigue igual.</span>}
     </header>
   );
 }
@@ -1472,6 +1474,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                   Cargada por <strong>{currentVersion.submitted_by_name || (currentVersion.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>
                   {currentVersion.submitted_by_email ? ` · ${currentVersion.submitted_by_email}` : ""}
                 </span>
+                {signatureReadout(currentVersion.signatures) && <span className="signature-read">{signatureReadout(currentVersion.signatures)}</span>}
               </div>
               {canClose && (
                 <div className="final-approval">
@@ -1592,6 +1595,7 @@ function OwnerPanel({ highlightRoundId = "", focusOnly = false, onBackToShare, o
                     <strong>Versión {version.sequence}</strong>
                     <span>{Math.ceil(version.byte_size / 1024)} KB · {new Date(version.created_at).toLocaleString()}</span>
                     <span className="version-author">Cargada por <strong>{version.submitted_by_name || (version.sequence === 0 ? "Creador del proceso" : "Participante")}</strong>{version.submitted_by_email ? ` · ${version.submitted_by_email}` : ""}</span>
+                    {signatureReadout(version.signatures) && <span className="signature-read">{signatureReadout(version.signatures)}</span>}
                     {version.delete_after && <span>Disponible hasta {new Date(version.delete_after).toLocaleString()}</span>}
                     <div className="version-actions">
                       <button className="text-button" disabled={Date.parse(version.delete_after) <= Date.now()} onClick={() => downloadVersion(version.id)}>Descargar esta versión</button>
