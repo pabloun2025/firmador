@@ -1,0 +1,33 @@
+---
+description: "Al implementar una función o corrección de LeapSign: aislamiento en rama, prueba que falla primero, cambios mínimos y ejecución por bloques. Guía local adaptada de Superpowers; no es el plugin ni una skill nativa."
+alwaysApply: false
+---
+
+# Implementación de LeapSign
+
+Guía local. No es el plugin Superpowers ni una skill reconocida por Cursor.
+
+Origen: https://github.com/obra/superpowers — revisión `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` (v7.0.1). Copyright (c) 2025 Jesse Vincent. Licencia MIT: `docs/agent-capabilities/licenses/superpowers-MIT-LICENSE.txt`. Texto parafraseado. Los comandos de worktree y de subagentes de Claude u otros arneses no se copian aquí.
+
+## Aislamiento
+
+Comprueba primero si el trabajo ya está aislado. En un Cloud Agent de Cursor la rama `cursor/<descripcion>-4226` ya es el espacio aislado: no crees otro worktree encima salvo que la tarea lo pida. Fuera de ese arnés, usa el worktree o la rama que la plataforma ya tenga, y solo entonces `git worktree`. No mezcles esta rama con cambios ajenos.
+
+## Prueba primero
+
+Para una función, corrección o cambio de comportamiento:
+
+1. Escribe o ajusta la prueba que expresa el resultado.
+2. Ejecútala y confirma que falla por la razón esperada.
+3. Escribe el código mínimo para que pase.
+4. Vuelve a ejecutarla y conserva la salida.
+
+Si no viste el fallo, no afirmes que la prueba cubre el caso. Prototipos desechables o un cambio que el usuario pida sin prueba quedan exceptuados solo si se dice de forma explícita; no uses esa excepción para saltarte `npm test` en un cambio de seguridad.
+
+## Ejecución
+
+Sigue el plan tarea a tarea. Cada bloque termina con la prueba que le corresponde. Si una tarea falla, pasa a la regla de depuración: no acumules parches sobre un síntoma.
+
+Cursor puede lanzar subagentes con herramientas distintas. Úsalos solo para tareas independientes, sin archivos compartidos. Escríbeles el contexto necesario; no hereda el historial. Si no hay subagentes, o las tareas se pisan, ejecuta el plan en esta sesión.
+
+No publiques, despliegues, migres ni actives servicios de pago como parte de la implementación.

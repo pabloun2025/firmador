@@ -1,0 +1,20 @@
+---
+description: "Ante un fallo de prueba, un bug o un comportamiento inesperado de LeapSign: investigar la causa antes de proponer o aplicar una corrección. Guía local adaptada de Superpowers; no es el plugin ni una skill nativa."
+alwaysApply: false
+---
+
+# Depuración de LeapSign
+
+Guía local. No es el plugin Superpowers ni una skill reconocida por Cursor.
+
+Origen: https://github.com/obra/superpowers — revisión `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` (v7.0.1). Copyright (c) 2025 Jesse Vincent. Licencia MIT: `docs/agent-capabilities/licenses/superpowers-MIT-LICENSE.txt`. Texto parafraseado.
+
+No propongas ni apliques una corrección hasta poder señalar la causa.
+
+1. Reproduce el fallo con el comando o el paso más pequeño que lo muestre. Guarda la salida.
+2. Lee el código y la prueba en el punto del fallo. No expliques el síntoma con una causa que no hayas visto.
+3. Comprueba el supuesto que falla: entrada, estado, permiso, plazo o dato. Una hipótesis se confirma o se descarta con una lectura o una ejecución.
+4. Solo entonces cambia el código. La prueba que reproducía el fallo debe pasar, y no debe aparecer otro fallo en la misma zona.
+5. Si la corrección toca autorización, almacenamiento, firmas, correo o cuotas, trátala también con la revisión manual de seguridad. No la presentes como un escaneo de Codex Security.
+
+No ocultes el error con un fallback que acepte un documento, una firma o un permiso que el sistema debería rechazar.

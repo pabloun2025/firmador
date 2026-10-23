@@ -1,0 +1,28 @@
+LeapSign — atribución de guías adaptadas
+
+Este directorio no instala plugins ni skills. Las reglas de `.cursor/rules/` son guías locales para Cursor.
+
+Superpowers
+  Origen: https://github.com/obra/superpowers
+  Revisión: 2ce8aa15d05bd57213e6f746f953aafb7ded7a8b (v7.0.1, 2026-10-21)
+  Copyright (c) 2025 Jesse Vincent
+  Licencia MIT. Copia: licenses/superpowers-MIT-LICENSE.txt
+  Las reglas parafrasean los flujos. No incluyen el código, los scripts ni los hooks del plugin.
+
+Frontend design
+  Origen: https://github.com/dobromirdikov/codex-frontend-design-skill
+  Revisión: 983119775a936d123df9fbfbc3821bdee5bb58fd (2026-05-14)
+  Derivada de la skill frontend-design de anthropics/claude-plugins-official, Apache-2.0.
+  Licencia Apache-2.0. Copia: licenses/frontend-design-APACHE-2.0.txt
+  Archivo modificado: .cursor/rules/leapsign-frontend.mdc
+  El cambio sustituye la instrucción de inventar una estética por la conservación de la identidad ya aprobada de LeapSign.
+
+Karpathy guidelines
+  Origen: https://github.com/multica-ai/andrej-karpathy-skills
+  Revisión: 2c606141936f1eeef17fa3043a72095b4765b9c2 (2026-04-20)
+  El README de esa revisión declara MIT. No hay archivo LICENSE en el árbol clonado.
+  Observaciones de origen: https://x.com/karpathy/status/2015883857489522876
+  Archivo modificado: .cursor/rules/karpathy-guidelines.mdc
+  Cambios: traducción al español y alcance por globs, en lugar de alwaysApply true.
+
+Codex Security y las skills de entorno administrado de Codex no se incorporan: no hay un paquete público compatible que esta sesión pueda reconocer.

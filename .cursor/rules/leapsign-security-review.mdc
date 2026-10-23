@@ -1,0 +1,32 @@
+---
+description: "Revisión manual de seguridad de LeapSign al cambiar autenticación, autorización, RLS, invitaciones, turnos, almacenamiento, PDF, firmas, secretos, correo, cuotas, concurrencia o conservación de datos. No es Codex Security."
+alwaysApply: false
+---
+
+# Revisión manual de seguridad
+
+Esto es una revisión manual. Codex Security no está instalado en Cursor y sus skills (`security-scan`, `deep-security-scan`, `security-diff-scan`, `finding-discovery`, `validation`, `triage-finding`, `attack-path-analysis`, `threat-model`, `define-security-policy`, `fix-finding`, `verify-fix`, `assess-patch-risk`, `propose-security-hardening`, `vulnerability-writeup`, `track-findings`) no están reconocidas. No llames a este trabajo escaneo oficial ni resultado de Codex Security.
+
+La fuente del producto sigue siendo `AGENTS.md`, `docs/security-audit.md` y `docs/security-release-status.md`. Léelos antes de opinar sobre controles ya publicados.
+
+## Qué mirar
+
+Recorre solo las categorías que el cambio toca:
+
+- autenticación y recuperación de acceso;
+- autorización, RLS y permiso por recurso, decididos en el servidor;
+- invitaciones y turnos de firmantes, incluido el orden y el plazo;
+- almacenamiento privado y las URL de descarga de corta duración;
+- subida y descarga de PDF, tamaño e inmutabilidad de cada versión;
+- lectura o comprobación de firmas: separa una marca visual de una firma digital, y separa integridad, confianza, vigencia, revocación y posible validez jurídica;
+- P12/PFX y contraseñas, que no entran al repositorio ni al servidor;
+- idempotencia y concurrencia de turnos y reservas;
+- validadores y cualquier servicio privado;
+- secretos, sin imprimir sus valores;
+- correo y destinatarios;
+- cuotas, coste y abuso, pasando por `supabase/functions/_shared/economic-guard.ts` y `reserve_security_budget` cuando la operación sea facturable;
+- conservación y purga de datos.
+
+## Cómo informar
+
+Para cada hallazgo: evidencia (archivo y comportamiento), severidad, impacto y corrección propuesta. No corrijas hallazgos ajenos a la tarea. No debilites RLS, TLS, validaciones ni cuotas para dejar una prueba en verde. No ejecutes pruebas masivas contra producción.

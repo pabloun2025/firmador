@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+# Límites de LeapSign que AGENTS.md no enumera
+
+`AGENTS.md` sigue siendo la fuente principal. Esta regla solo añade invariantes que ese archivo no lista. No sustituye una revisión de seguridad ni autoriza despliegues.
+
+Este repositorio es LeapSign v1 (`firmador`). LeapSign v2 es otro repositorio y otro proyecto. No compartas bases de datos, buckets, tokens, secretos ni servicios privados entre versiones.
+
+- No modifiques producción (`firma.veryfacil.org`, `admin.veryfacil.org`) ni sus recursos sin autorización expresa. Un entorno de prueba no autoriza el de producción.
+- No actives servicios de pago ni cambies cuotas, migraciones o secretos sin autorización expresa.
+- No pidas, pegues ni subas contraseñas, claves privadas, P12/PFX ni su contraseña. Ese material permanece en el dispositivo de quien firma.
+- No uses certificados reales en pruebas automatizadas.
+- No reescribas un PDF ya firmado. Cada versión es privada, inmutable, identificada por hash y ligada a la anterior.
+- Una firma visual, imagen, texto o QR no es una firma digital. No afirmes integridad, confianza, vigencia, revocación ni validez jurídica si la tarea no las ha comprobado.
+- La autorización se decide en el servidor, por usuario y por recurso.
+- No debilites RLS, TLS, validaciones o cuotas para hacer pasar una prueba.
+- No cuentes como aprobadas las pruebas omitidas o no ejecutadas.
+- Conserva cambios y archivos ajenos a la tarea. Antes de un cambio difícil de revertir, deja un punto de recuperación en git.
