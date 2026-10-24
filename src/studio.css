@@ -170,6 +170,48 @@ label, .login-card label { font-weight: 600; font-size: 13px; }
 .owner-detail .signature-queue li small, .owner-detail .invitation-statuses li small { color: #4c6257; }
 .version-section .final-approval p { font-size: 13px; line-height: 1.5; }
 .owner-detail dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tracking-lead { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid #34745f; background: #f3f8f5; color: #1c3d34; font-size: 15px; line-height: 1.5; }
+.version-section > .version-author { margin: 12px 18px 0; font-size: 14px; line-height: 1.45; }
+.signer-banner { margin: 16px 18px 0; padding: 16px 18px; border: 1px solid #b7d4c8; border-radius: 8px; background: #e7f3ee; }
+.signer-banner .signer-label { display: block; margin-bottom: 4px; color: #1d4f40; font-size: 15px; font-weight: 650; line-height: 1.35; }
+.signer-banner strong { display: block; color: #102c25; font-size: 20px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.signer-banner p { margin: 8px 0 0; color: #2d5146; font-size: 14px; line-height: 1.45; }
+.signer-banner .signer-caveat { margin-top: 6px; color: #5c7268; font-size: 13px; }
+.signer-banner.signer-no_new_signature,
+.signer-banner.signer-unreadable { border-color: #ead3ae; background: #fff6ea; }
+.signer-banner.signer-no_new_signature .signer-label,
+.signer-banner.signer-unreadable .signer-label,
+.signer-banner.signer-no_new_signature strong,
+.signer-banner.signer-unreadable strong { color: #6a4310; }
+.pdf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 18px 0; }
+.pdf-actions .primary,
+.pdf-actions .signout { min-height: 46px; }
+.close-choice { margin: 18px 18px 0; border: 1px solid #c5d9cf; border-radius: 8px; background: #f4f8f6; }
+.close-choice > summary { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.close-choice > summary::-webkit-details-marker { display: none; }
+.close-choice > summary > span { display: grid; gap: 2px; min-width: 0; }
+.close-choice > summary strong { color: #102c25; font-size: 15px; }
+.close-choice > summary small { color: #4d675c; font-size: 13px; font-weight: 500; line-height: 1.4; }
+.close-choice > summary .icon { margin-left: auto; color: #345b4d; transition: transform .16s ease; }
+.close-choice[open] > summary .icon { transform: rotate(180deg); }
+.close-choice-body { display: grid; gap: 10px; padding: 0 16px 16px; }
+.close-choice-body > p { margin: 0; color: #2f4d43; font-size: 14px; line-height: 1.5; }
+.close-choice .final-confirm { font-size: 14px; }
+.close-choice .final-confirm strong { font-size: 15px; }
+.close-choice .closure-warning { margin: 0; }
+.retention-disclosure { margin: 14px 18px 0; border: 1px solid #d6e3dc; border-radius: 8px; background: #fff; }
+.retention-disclosure > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 12px; cursor: pointer; list-style: none; color: #345b4d; font-size: 14px; font-weight: 650; }
+.retention-disclosure > summary::-webkit-details-marker { display: none; }
+.retention-disclosure > summary .icon { margin-left: auto; transition: transform .16s ease; }
+.retention-disclosure[open] > summary .icon { transform: rotate(180deg); }
+.retention-disclosure p { margin: 0; padding: 0 12px 12px; color: #3d584d; font-size: 14px; line-height: 1.5; }
+.submission-list .signature-read { font-size: 15px; line-height: 1.4; }
+.submission-list .signature-read strong { font-size: 16px; font-weight: 700; }
+.pdf-preview-dialog { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; gap: 0; padding: 16px; background: #102c25d9; }
+.pdf-preview-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 8px 8px 0 0; background: #f7f6f1; }
+.pdf-preview-bar strong { min-width: 0; color: #102c25; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.pdf-preview-bar > div { display: flex; flex: 0 0 auto; gap: 8px; }
+.pdf-preview-dialog iframe { flex: 1; width: 100%; min-height: 0; border: 0; border-radius: 0 0 8px 8px; background: #fff; }
 @media (max-width: 600px) {
   .current-pdf-heading { padding: 14px 14px 0; }
   .current-pdf-heading h4 { font-size: 17px; }
@@ -177,4 +219,19 @@ label, .login-card label { font-weight: 600; font-size: 13px; }
   .owner-detail dl { grid-template-columns: 1fr; }
   .process-controls .owner-actions { flex-direction: column; align-items: stretch; }
   .version-section .final-approval { padding: 12px; }
+  .signer-banner { margin: 14px 14px 0; padding: 14px; }
+  .signer-banner strong { font-size: 18px; }
+  .version-section > .version-author,
+  .pdf-actions,
+  .close-choice,
+  .retention-disclosure,
+  .pdf-expiry { margin-left: 14px; margin-right: 14px; }
+  .pdf-actions,
+  .pdf-preview-bar,
+  .pdf-preview-bar > div { flex-direction: column; align-items: stretch; }
+  .pdf-actions .primary,
+  .pdf-actions .signout,
+  .pdf-preview-bar .primary,
+  .pdf-preview-bar .signout { width: 100%; }
+  .pdf-preview-dialog { padding: 8px; }
 }

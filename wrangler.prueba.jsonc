@@ -1,0 +1,12 @@
+{
+  "name": "firmador-prueba",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "prueba.veryfacil.org", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

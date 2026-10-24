@@ -17,7 +17,7 @@ Deno.serve(protectEndpoint("get-owner-round", createClient, async (request, cont
     const { data: workflow } = workflowResult;
     if (!workflow) throw new Error('No tienes acceso a esta ronda.');
     const results = await Promise.all([
-      admin.from('document_versions').select('id,sequence,sha256,byte_size,created_at,accepted_at,validation_status,submitted_by_session_hash,submitted_by_name,submitted_by_email,delete_after').eq('workflow_id', id).is('discarded_at', null).order('sequence', { ascending: false }),
+      admin.from('document_versions').select('id,sequence,sha256,byte_size,created_at,accepted_at,validation_status,validation_summary,submitted_by_session_hash,submitted_by_name,submitted_by_email,delete_after').eq('workflow_id', id).is('discarded_at', null).order('sequence', { ascending: false }),
       admin.from('open_round_locks').select('holder_name,holder_email,expires_at,version_id_at_claim,reviewed_version_at').eq('workflow_id', id).maybeSingle(),
       admin.from('open_round_waitlist').select('holder_name,email,joined_at').eq('workflow_id', id).order('joined_at').limit(20),
       admin.from('error_reports').select('id,reason,detail,reporter_name,reporter_email,created_at').eq('workflow_id', id).order('created_at', { ascending: false }).limit(10),
@@ -28,7 +28,16 @@ Deno.serve(protectEndpoint("get-owner-round", createClient, async (request, cont
     ]);
     assertQuerySuccess(results);
     const [{ data: versions }, { data: lock }, { data: queue }, { data: reports }, { data: events }, { data: submissions }, { data: contacts }, { data: invitations }] = results;
-    return Response.json({ workflow, activeTurn: lock ?? null, queue: queue ?? [], versions: versions ?? [], reports: reports ?? [], events: events ?? [], submissions: submissions ?? [], contacts: contacts ?? [], invitations: invitations ?? [] }, { headers: cors });
+    const visibleVersions = (versions ?? []).map(version => {
+      const summary = version.validation_summary as { signatures?: { status?: unknown; names?: unknown; addedNames?: unknown } } | null;
+      const source = summary?.signatures;
+      const names = Array.isArray(source?.names) ? source.names.filter((name): name is string => typeof name === 'string').slice(0, 64) : [];
+      const addedNames = Array.isArray(source?.addedNames) ? source.addedNames.filter((name): name is string => typeof name === 'string').slice(0, 64) : [];
+      const status = source?.status === 'detected' || source?.status === 'no_new_signature' || source?.status === 'unreadable' ? source.status : undefined;
+      const { validation_summary: _summary, ...visible } = version;
+      return { ...visible, signatures: status ? { status, names, addedNames } : null };
+    });
+    return Response.json({ workflow, activeTurn: lock ?? null, queue: queue ?? [], versions: visibleVersions, reports: reports ?? [], events: events ?? [], submissions: submissions ?? [], contacts: contacts ?? [], invitations: invitations ?? [] }, { headers: cors });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Error inesperado.' }, { status: error instanceof DataUnavailableError ? error.status : 400, headers: cors });
   }

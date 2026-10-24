@@ -2,6 +2,7 @@ import { protectEndpoint, budgetedFetch, reserveUpload } from "../_shared/econom
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { comparePdfProfiles, inspectPdf, validateRelatedSize } from "../_shared/pdf-validation.ts";
 import { validateRelatedDocumentName } from "../_shared/document-name.ts";
+import { readSignatureProgress } from "../_shared/signature-names.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -150,16 +151,22 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
         "El archivo es igual a la versión anterior. Descarga el PDF, fírmalo y vuelve a cargar la copia resultante.",
       );
     validateRelatedSize(Number(parent.byte_size), document.size);
+    let previousBytes: Uint8Array | null = null;
+    try {
+      const { data: parentBlob, error: parentDownloadError } = await admin.storage.from("firmador-documents").download(parent.storage_path);
+      if (!parentDownloadError && parentBlob) previousBytes = new Uint8Array(await parentBlob.arrayBuffer());
+    } catch { previousBytes = null; }
     let parentProfile;
     if (parent.page_count && Array.isArray(parent.page_dimensions) && parent.page_dimensions.length) {
       parentProfile = { pageCount: Number(parent.page_count), pageDimensions: parent.page_dimensions };
     } else {
-      const { data: parentBlob, error: parentDownloadError } = await admin.storage.from("firmador-documents").download(parent.storage_path);
-      if (parentDownloadError || !parentBlob) throw new Error("No pudimos comprobar el documento vigente.");
-      parentProfile = await inspectPdf(new Uint8Array(await parentBlob.arrayBuffer()));
+      if (!previousBytes) throw new Error("No pudimos comprobar el documento vigente.");
+      parentProfile = await inspectPdf(previousBytes);
     }
     const candidateProfile = await inspectPdf(bytes);
     comparePdfProfiles(parentProfile, candidateProfile);
+    const signatures = await readSignatureProgress(bytes, previousBytes);
+    const validationSummary = { mode: "structural_profile", pageCount: candidateProfile.pageCount, sizeRelation: "accepted", signatures };
     let submissionId: string;
     const { data: existing } = await admin
       .from("signature_submissions")
@@ -169,8 +176,10 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
       .eq("parent_version_id", workflow.current_version_id)
       .in("status", ["uploaded", "validating"])
       .maybeSingle();
-    if (existing) submissionId = existing.id;
-    else {
+    if (existing) {
+      submissionId = existing.id;
+      await admin.from("signature_submissions").update({ validation_summary: validationSummary }).eq("id", submissionId);
+    } else {
       submissionId = crypto.randomUUID();
       const path = `${id}/submissions/${submissionId}.pdf`;
       await reserveUpload(admin, document.size, workflow.owner_id);
@@ -189,7 +198,7 @@ Deno.serve(protectEndpoint("submit-signed-version", createClient, async (request
           byte_size: document.size,
           page_count: candidateProfile.pageCount,
           page_dimensions: candidateProfile.pageDimensions,
-          validation_summary: { mode: "structural_profile", pageCount: candidateProfile.pageCount, sizeRelation: "accepted" },
+          validation_summary: validationSummary,
           submitted_by_session_hash: sessionHash,
           status: "uploaded",
         });
