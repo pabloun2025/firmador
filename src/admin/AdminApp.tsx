@@ -270,26 +270,15 @@ function Overview({ dashboard, refresh, act }: { dashboard: Dashboard; refresh: 
     </div>
     <section className="admin-card admin-health">
       <div><h3>Mantenimiento</h3><p>{number(metrics.cleanup_pending)} archivos pendientes de purga · {number(metrics.errors_last_24h)} incidencias en las últimas 24 horas.</p></div>
-      <button className="admin-secondary" onClick={() => {
-        const reason = window.prompt("Motivo para ejecutar las purgas pendientes:");
-        if (reason) void act({ action: "run_cleanup", reason }, "Purgado procesado.");
-      }}>Procesar purgas</button>
+      <button className="admin-secondary" onClick={() => void act({ action: "run_cleanup" }, "Purgado procesado.")}>Procesar purgas</button>
     </section>
   </>;
 }
 
 function Accounts({ users, load, act }: { users: AdminUser[]; load: () => void; act: (body: Record<string, unknown>, success: string) => Promise<boolean> }) {
   async function account(user: AdminUser, action: "disable" | "enable" | "delete") {
-    const label = action === "disable" ? "bloquear" : action === "enable" ? "reactivar" : "eliminar definitivamente";
-    if (!window.confirm(`¿Quieres ${label} ${user.email}?`)) return;
-    const reason = window.prompt("Motivo de esta operación (mínimo 8 caracteres):");
-    if (!reason) return;
-    let confirm_email: string | undefined;
-    if (action === "delete") {
-      confirm_email = window.prompt(`Escribe ${user.email} para confirmar:`) || undefined;
-      if (!confirm_email) return;
-    }
-    await act({ action: "account_action", account_action: action, user_id: user.id, reason, confirm_email }, action === "delete" ? "Cuenta y datos eliminados." : "Cuenta actualizada.");
+    if (action === "delete" && !window.confirm(`¿Eliminar definitivamente ${user.email} y sus archivos?`)) return;
+    await act({ action: "account_action", account_action: action, user_id: user.id, ...(action === "delete" ? { confirm_email: user.email } : {}) }, action === "delete" ? "Cuenta y datos eliminados." : "Cuenta actualizada.");
     load();
   }
   return <>
@@ -302,11 +291,8 @@ function Accounts({ users, load, act }: { users: AdminUser[]; load: () => void; 
 
 function Workflows({ workflows, load, act }: { workflows: AdminWorkflow[]; load: () => void; act: (body: Record<string, unknown>, success: string) => Promise<boolean> }) {
   async function manage(workflow: AdminWorkflow, action: string) {
-    const names: Record<string, string> = { pause: "pausar", resume: "reanudar", release_turn: "liberar el turno", cancel: "cancelar", purge: "purgar definitivamente" };
-    if (!window.confirm(`¿Quieres ${names[action]} “${workflow.title}”?`)) return;
-    const reason = window.prompt("Motivo de esta corrección (mínimo 8 caracteres):");
-    if (!reason) return;
-    await act({ action: "workflow_action", workflow_action: action, workflow_id: workflow.id, reason }, "Proceso actualizado.");
+    if ((action === "purge" || action === "cancel") && !window.confirm(action === "purge" ? `¿Purgar definitivamente “${workflow.title}”?` : `¿Cancelar “${workflow.title}”? Los archivos se programan para borrarse.`)) return;
+    await act({ action: "workflow_action", workflow_action: action, workflow_id: workflow.id }, "Proceso actualizado.");
     load();
   }
   return <>
@@ -347,14 +333,12 @@ function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard
     ["email_master_enabled", "Envío general de correos"], ["email_invitations_enabled", "Invitaciones"], ["email_reminders_enabled", "Recordatorios a 1 y 24 horas"], ["email_completion_enabled", "Objetivo de firmas alcanzado"], ["automatic_cleanup_enabled", "Procesamiento de purgas"], ["maintenance_mode", "Modo mantenimiento"],
   ];
   async function saveSettings() {
-    const reason = window.prompt("Motivo del cambio de configuración:"); if (!reason) return;
-    if (await act({ action: "update_settings", ...settings, reason }, "Configuración guardada.")) setDashboard({ ...dashboard, settings });
+    if (await act({ action: "update_settings", ...settings }, "Configuración guardada.")) setDashboard({ ...dashboard, settings });
   }
   async function saveTemplate() {
     if (!editing) return;
-    const reason = window.prompt("Motivo del cambio de plantilla:"); if (!reason) return;
     setEditorError("");
-    if (!await act({ action: "update_template", ...editing, reason }, "Plantilla guardada.")) {
+    if (!await act({ action: "update_template", ...editing }, "Plantilla guardada.")) {
       setEditorError("No pudimos guardar los cambios. Tu texto sigue aquí; vuelve a intentarlo.");
       return;
     }
@@ -363,7 +347,7 @@ function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard
   }
   return <>
     <div className="admin-section-title"><div><span className="admin-kicker">Comunicaciones</span><h2>Correos, plantillas y servicio</h2></div><button onClick={saveSettings}>Guardar configuración</button></div>
-    <section className="admin-card admin-toggles">{toggles.map(([key, label]) => <label key={key}><span><strong>{label}</strong><small>{key === "maintenance_mode" ? "Detiene temporalmente nuevas operaciones públicas." : "El cambio queda registrado en auditoría."}</small></span><input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => setSettings({ ...settings, [key]: event.target.checked })} /></label>)}</section>
+    <section className="admin-card admin-toggles">{toggles.map(([key, label]) => <label key={key}><span><strong>{label}</strong><small>{key === "maintenance_mode" ? "Frena crear procesos, enviar invitaciones y tomar turno. No frena una firma que ya está en curso." : "El cambio queda registrado en auditoría."}</small></span><input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => setSettings({ ...settings, [key]: event.target.checked })} /></label>)}</section>
     <h3 className="admin-subheading">Plantillas de correo</h3>
     <div className="admin-template-list">{dashboard.templates.map((template) => <article className="admin-card" key={template.template_key}><div><span className={`admin-status ${template.enabled ? "active" : "paused"}`}>{template.enabled ? "Activa" : "Apagada"}</span><h3>{template.label}</h3><p>{template.subject_template}</p><small>Actualizada {date(template.updated_at)}</small></div><button className="admin-secondary" onClick={() => { setEditorError(""); setEditing({ ...template }); }}>Editar</button></article>)}</div>
     {editing && <div ref={modalRef} className="admin-modal" role="dialog" aria-modal="true" aria-label={`Editar ${editing.label}`}><section><div className="admin-section-title"><h2>{editing.label}</h2><button className="admin-secondary" onClick={() => setEditing(null)}>Cerrar</button></div><label>Asunto<input value={editing.subject_template} maxLength={160} onChange={(event) => setEditing({ ...editing, subject_template: event.target.value })} /></label><label>Mensaje<textarea value={editing.body_template} maxLength={3000} rows={9} onChange={(event) => setEditing({ ...editing, body_template: event.target.value })} /></label><p className="admin-help">Variables disponibles: <code>{"{{name}}"}</code>, <code>{"{{title}}"}</code> y <code>{"{{link}}"}</code>.</p><label className="admin-check"><input type="checkbox" checked={editing.enabled} onChange={(event) => setEditing({ ...editing, enabled: event.target.checked })} /> Plantilla activa</label><button onClick={saveTemplate}>Guardar plantilla</button>{editorError && <p className="admin-alert error" role="alert">{editorError}</p>}</section></div>}
@@ -371,7 +355,7 @@ function Communications({ dashboard, setDashboard, act }: { dashboard: Dashboard
 }
 
 function Audit({ entries }: { entries: AuditEntry[] }) {
-  return <><div className="admin-section-title"><div><span className="admin-kicker">Trazabilidad</span><h2>Auditoría administrativa</h2></div></div><div className="admin-audit">{entries.map((entry) => <article className="admin-card" key={entry.id}><header><strong>{entry.action.replaceAll("_", " ")}</strong><time>{date(entry.created_at)}</time></header><p>{entry.reason || "Acceso al panel"}</p><small>{entry.admin_email} · {entry.target_type}{entry.target_id ? ` · ${entry.target_id}` : ""}</small></article>)}</div></>;
+  return <><div className="admin-section-title"><div><span className="admin-kicker">Trazabilidad</span><h2>Auditoría administrativa</h2></div></div><div className="admin-audit">{entries.map((entry) => <article className="admin-card" key={entry.id}><header><strong>{entry.action.replaceAll("_", " ")}</strong><time>{date(entry.created_at)}</time></header>{entry.reason && <p>{entry.reason}</p>}<small>{entry.admin_email} · {entry.target_type}{entry.target_id ? ` · ${entry.target_id}` : ""}</small></article>)}</div></>;
 }
 
 function Console({ session }: { session: Session }) {
@@ -386,7 +370,7 @@ function Console({ session }: { session: Session }) {
   async function loadDashboard() { const result = await run(() => invoke<Dashboard>({ action: "dashboard" })); if (result) setDashboard(result); }
   async function loadUsers() { const result = await run(() => invoke<{ users: AdminUser[] }>({ action: "users" })); if (result) setUsers(result.users); }
   async function loadWorkflows() { const result = await run(() => invoke<{ workflows: AdminWorkflow[] }>({ action: "workflows" })); if (result) setWorkflows(result.workflows); }
-  async function act(body: Record<string, unknown>, success: string) { const result = await run(() => invoke(body)); if (!result) return false; setNotice(success); await loadDashboard(); return true; }
+  async function act(body: Record<string, unknown>, success: string) { const result = await run(() => invoke({ reason: "Gestion directa", ...body })); if (!result) return false; setNotice(success); await loadDashboard(); return true; }
   useEffect(() => { void loadDashboard(); }, []);
   useEffect(() => { if (tab === "accounts") void loadUsers(); if (tab === "workflows") void loadWorkflows(); }, [tab]);
   const content = useMemo(() => {

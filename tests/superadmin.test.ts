@@ -25,8 +25,11 @@ describe("superadmin security contract", () => {
     expect(edge).not.toContain("download-version");
   });
 
-  it("requires a written reason for privileged mutations", () => {
-    expect(edge.match(/requireReason\(payload\.reason\)/g)?.length).toBeGreaterThanOrEqual(5);
+  it("audits privileged mutations without demanding a written reason", () => {
+    expect(edge).toContain("superadmin_audit_log");
+    expect(edge).not.toContain("requireReason");
+    expect(edge).not.toContain("confirm_email");
+    expect(readFileSync("src/admin/AdminApp.tsx", "utf8")).not.toContain("window.prompt");
   });
 });
 
