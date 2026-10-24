@@ -3,7 +3,8 @@ import type { Session } from "@supabase/supabase-js";
 import { createRoot } from "react-dom/client";
 import { getSupabase } from "./lib/supabase";
 import { expandRoundId, roundPath } from "./lib/round-link";
-import { documentFilename, isRelatedDocumentName } from "./lib/document-name";
+import { documentFilename } from "./lib/document-name";
+import { reviewSignedUpload } from "./lib/signed-upload";
 import { signatureHeadline } from "./lib/signature-progress";
 import { whatsappShareUrl } from "./lib/share";
 import { startPolling } from "./lib/polling";
@@ -824,17 +825,18 @@ function RoundAccess({ id }: { id: string }) {
                       disabled={!downloaded}
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null;
-                        if (file && expectedFilename && !isRelatedDocumentName(expectedFilename, file.name)) {
+                        if (!file) return;
+                        const rejection = reviewSignedUpload(file, expectedFilename, parentByteSize);
+                        if (rejection) {
                           setSignedDocument(null);
-                          setNoticeTarget("submission"); setNoticeTone("error");
-                          setNotice("El nombre del archivo que intentas subir no corresponde al nombre original.");
+                          setNoticeTarget("submission");
+                          setNoticeTone("error");
+                          setNotice(rejection);
                           e.target.value = "";
-                        } else if (file && parentByteSize && (file.size < parentByteSize * .8 || file.size > parentByteSize + Math.max(3 * 1024 * 1024, parentByteSize * .75))) {
-                          setSignedDocument(null);
-                          setNoticeTarget("submission"); setNoticeTone("error");
-                          setNotice("Este archivo tiene un tamaño muy distinto al PDF descargado. Comprueba que seleccionaste el documento correcto.");
-                          e.target.value = "";
-                        } else setSignedDocument(file);
+                          return;
+                        }
+                        setSignedDocument(file);
+                        if (noticeTarget === "submission") setNotice("");
                       }}
                     />
                     <span className="upload-icon">
@@ -2194,7 +2196,12 @@ function App() {
             <input
               type="file"
               accept="application/pdf,.pdf"
-              onChange={(e) => setDocument(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                if (!file) return;
+                setDocument(file);
+                if (workspaceNoticeTone === "error") setNotice("");
+              }}
             />
             <span className="upload-icon">
               <Icon name="upload" />
