@@ -31,6 +31,24 @@ describe("superadmin security contract", () => {
     expect(edge).not.toContain("confirm_email");
     expect(readFileSync("src/admin/AdminApp.tsx", "utf8")).not.toContain("window.prompt");
   });
+
+  it("adds operational actions without document download or a raw mail call", () => {
+    const admin = readFileSync("src/admin/AdminApp.tsx", "utf8");
+    for (const action of ["operations", "workflow_detail", "account_detail", "search", "remove_waiter", "resend_invitation", "retry_cleanup", "test_email", "pause_service"]) {
+      expect(edge).toContain(`action === "${action}"`);
+    }
+    expect(edge).toContain("budgetedFetch");
+    expect(edge).toContain("https://api.resend.com/emails");
+    expect(edge).toContain("sendMail(context, context.email");
+    expect(edge).toContain('["creation", "emails"]');
+    expect(edge).toContain('select("id,workflow_id,reason,status,attempts,last_error,scheduled_for")');
+    expect(edge).not.toMatch(/fetch\(\s*['"]https:\/\/api\.resend\.com/);
+    expect(edge).not.toContain("createSignedUrl");
+    expect(edge).not.toContain("limits");
+    expect(admin).toContain("Operación");
+    expect(admin).toContain("Estos límites internos no son un tope de factura.");
+    expect(admin).not.toContain("window.prompt");
+  });
 });
 
 describe("superadmin recovery contract", () => {

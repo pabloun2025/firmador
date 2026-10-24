@@ -78,6 +78,24 @@ button.danger, .admin-row-actions button.danger, .admin-workflows footer button.
 .admin-modal textarea { resize:vertical; }
 .admin-check { display:flex!important; grid-template-columns:none!important; align-items:center; }
 .admin-help { color:#687970; font-size:12px; }
+.admin-search { display:flex; gap:8px; margin:0 0 18px; }
+.admin-search input, .admin-search select { width:auto; padding:11px 12px; border:1px solid #cfdad3; border-radius:10px; background:#fff; color:inherit; font:inherit; }
+.admin-search input { flex:1; min-width:0; }
+.admin-ops { display:grid; gap:14px; }
+.admin-ops > .admin-card, .admin-ops-block { padding:18px; }
+.admin-ops h3, .admin-file h3, .admin-ops-block h3 { margin:16px 0 0; }
+.admin-ops article > h3:first-child, .admin-ops-block h3 { margin-top:0; }
+.admin-ops ul, .admin-file ul, .admin-ops-block ul { display:grid; gap:0; margin:12px 0 0; padding:0; list-style:none; }
+.admin-ops li, .admin-file li, .admin-ops-block li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-top:1px solid #e8eeea; }
+.admin-ops li p, .admin-file li p, .admin-ops-block li p { margin:4px 0 0; }
+.admin-ops li small, .admin-file small { color:#52665c; font-size:12px; }
+.admin-warning-note { margin:8px 0 0; color:#806017; font-size:13px; }
+.admin-ops .admin-row-actions { margin-top:14px; flex-wrap:wrap; }
+.admin-preview { display:grid; gap:6px; margin:8px 0 16px; padding:14px; border-radius:10px; background:#f5f8f6; }
+.admin-preview p { margin:0; white-space:pre-wrap; color:#53665e; }
+.admin-file dl { display:grid; grid-template-columns:148px 1fr; gap:6px 12px; margin:8px 0 0; }
+.admin-file dt { color:#52665c; font-size:12px; }
+.admin-modal > section.wide { width:min(860px,100%); }
 .admin-audit { display:grid; gap:9px; }
 .admin-audit article { padding:16px; }
 .admin-audit header { display:flex; justify-content:space-between; gap:16px; }
@@ -88,5 +106,5 @@ button.danger, .admin-row-actions button.danger, .admin-workflows footer button.
 .admin-workflows header code, .admin-toggles small, .admin-template-list small,
 .admin-audit time, .admin-audit small { color:#52665c; }
 @media (max-width:1000px) { .admin-metrics { grid-template-columns:repeat(2,1fr); } .admin-template-list { grid-template-columns:1fr; } }
-@media (max-width:760px) { .admin-top { padding:16px 18px; } .admin-top > div:last-child span { display:none; } .admin-layout { display:block; } .admin-layout > nav { position:static; display:flex; height:auto; overflow:auto; padding:12px 16px; border-right:0; border-bottom:1px solid var(--admin-line); } .admin-layout > nav button { flex:0 0 auto; } .admin-content { padding:26px 16px 60px; } .admin-metrics { grid-template-columns:1fr 1fr; } .admin-toggles { grid-template-columns:1fr; } .admin-login { padding:20px; } .admin-login > section { margin-top:8vh; padding:25px; } .admin-section-title { align-items:flex-start; } }
+@media (max-width:760px) { .admin-top { padding:16px 18px; } .admin-top > div:last-child span { display:none; } .admin-layout { display:block; } .admin-layout > nav { position:static; display:flex; height:auto; overflow:auto; padding:12px 16px; border-right:0; border-bottom:1px solid var(--admin-line); } .admin-layout > nav button { flex:0 0 auto; } .admin-content { padding:26px 16px 60px; } .admin-metrics { grid-template-columns:1fr 1fr; } .admin-toggles { grid-template-columns:1fr; } .admin-login { padding:20px; } .admin-login > section { margin-top:8vh; padding:25px; } .admin-section-title { align-items:flex-start; } .admin-search { display:grid; } .admin-file dl { grid-template-columns:1fr; } .admin-ops li, .admin-file li, .admin-ops-block li { align-items:flex-start; display:grid; } }
 @media (max-width:480px) { .admin-metrics { grid-template-columns:1fr; } .admin-section-title { display:grid; } .admin-health, .admin-workflows header { align-items:flex-start; display:grid; } }
