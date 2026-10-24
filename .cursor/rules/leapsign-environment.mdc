@@ -1,0 +1,22 @@
+---
+description: "Al preparar, diagnosticar o reparar el entorno de desarrollo de LeapSign: versiones, rama, red, dependencias, build y pruebas, sin copiar secretos ni usar las skills de entorno de Codex."
+alwaysApply: false
+---
+
+# Entorno de LeapSign en Cursor
+
+Las skills de Codex `cloud-environment-runtime` y `cloud-environment-onboarding:setup` pertenecen a su entorno administrado. No están instaladas ni son trasladables como plugin. No las invoques por nombre.
+
+En esta plataforma, la skill nativa reconocida para el entorno de Cloud Agent es `env-setup` (`/home/ubuntu/.cursor/skills-cursor/env-setup/SKILL.md`). Úsala cuando la tarea sea configurar o diagnosticar el entorno del agente. No la confundas con las skills de Codex.
+
+## Comprobaciones
+
+- Versiones de Node y de los paquetes que el cambio usa.
+- Repositorio `pabloun2025/firmador`, rama actual y si el trabajo ya está aislado.
+- Nombres de variables presentes, nunca sus valores. No copies secretos entre v1 y v2 ni los escribas en el repositorio.
+- Salida a la red solo si la tarea lo necesita. No des por hecho un proveedor porque exista un nombre en la documentación.
+- Dependencias con el comando ya definido (`npm ci` o el que el lockfile exija), de forma reproducible.
+- `npm test` y `npm run build` cuando el cambio afecte a la aplicación.
+- Si un servicio de arranque falla, lee su registro antes de reinstalar nada.
+
+No despliegues, no migres y no actives servicios de pago desde esta guía.

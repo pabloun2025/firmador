@@ -1,0 +1,50 @@
+---
+globs: src/**/*.{ts,tsx,css},supabase/**/*.ts,tests/**/*.ts,scripts/**/*.{mjs,js,ts},server/**/*.ts,validator/**/*.ts
+alwaysApply: false
+---
+
+# Guías de Karpathy, adaptadas
+
+Guía local. No es una skill nativa de Cursor.
+
+Origen: https://github.com/multica-ai/andrej-karpathy-skills — revisión `2c606141936f1eeef17fa3043a72095b4765b9c2`. El archivo de origen es `.cursor/rules/karpathy-guidelines.mdc`, con `alwaysApply: true`. Aquí se tradujo al español y se limitó a los archivos de implementación para no cargarla en todas las conversaciones. El repositorio de origen declara MIT en su README y no incluye un archivo `LICENSE` en esa revisión. Derivada de las observaciones de Andrej Karpathy, https://x.com/karpathy/status/2015883857489522876.
+
+Estas guías prefieren cautela a velocidad. En un cambio trivial, usa criterio.
+
+## 1. Pensar antes de escribir
+
+No supongas. No escondas la duda. Muestra las alternativas.
+
+- Di los supuestos. Si hay dos lecturas, no elijas en silencio.
+- Si hay un camino más simple, dilo.
+- Si algo no está claro, nómbralo y pregunta.
+
+## 2. Simplicidad
+
+El mínimo código que resuelve el pedido. Nada especulativo.
+
+- Sin funciones, abstracciones ni configuración que nadie pidió.
+- Sin manejo de errores para casos imposibles.
+- Si el cambio pudo ser más corto, acórtalo.
+
+## 3. Cambios quirúrgicos
+
+Toca solo lo necesario. Limpia solo lo que tu cambio dejó suelto.
+
+- No mejores código, comentarios ni formato vecinos.
+- No reescribas lo que ya funciona.
+- Sigue el estilo del archivo.
+- Si ves código muerto ajeno, menciónalo; no lo borres.
+- Quita imports y símbolos que tu propio cambio haya dejado sin uso.
+
+Cada línea cambiada tiene que servir al pedido.
+
+## 4. Objetivo comprobable
+
+Convierte la tarea en un resultado que se pueda verificar.
+
+- «Añade validación» pasa a ser una prueba de entradas inválidas que primero falla y luego pasa.
+- «Corrige el fallo» pasa a ser una prueba que lo reproduce y luego queda en verde.
+- «Refactoriza» exige la misma suite en verde antes y después.
+
+Un criterio débil («haz que funcione») no cuenta como verificación.

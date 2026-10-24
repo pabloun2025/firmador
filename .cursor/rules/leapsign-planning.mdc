@@ -1,0 +1,33 @@
+---
+description: "Antes de diseñar o implementar una función nueva o un cambio complejo de LeapSign: aclarar objetivo, restricciones y criterios, y dejar un plan verificable. Guía local adaptada de Superpowers; no es el plugin ni una skill nativa."
+alwaysApply: false
+---
+
+# Planificación de LeapSign
+
+Guía local. No es el plugin Superpowers ni una skill reconocida por Cursor.
+
+Origen: https://github.com/obra/superpowers — revisión `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` (v7.0.1). Copyright (c) 2025 Jesse Vincent. Licencia MIT: `docs/agent-capabilities/licenses/superpowers-MIT-LICENSE.txt`. El texto está parafraseado para Cursor y para este repositorio. No incluye los scripts, el servidor de brainstorming ni el hook `sessionStart` del plugin.
+
+## Cuándo usarla
+
+Úsala antes de crear una función, cambiar un comportamiento o escribir un plan de varias tareas. Una corrección de una línea con el resultado ya definido no necesita este flujo.
+
+## Comprender el pedido
+
+1. Lee `AGENTS.md`, esta regla de límites si ya está en contexto, y el código y los documentos que la tarea toca.
+2. Separa lo que el pedido ya fija de lo que falta. Si falta una decisión que cambia el diseño, haz una pregunta concreta. No abras un cuestionario.
+3. Escribe alcance, restricciones, riesgos y criterios de aceptación antes de editar código de aplicación.
+4. Si el pedido cubre subsistemas independientes, propone un plan por subsistema. Cada plan debe poder probarse solo.
+
+## Plan verificable
+
+Guarda el plan en `docs/superpowers/plans/AAAA-MM-DD-nombre.md` solo cuando la tarea pida un plan persistente. Si no, déjalo en la respuesta y no crees el archivo.
+
+Cada tarea del plan indica:
+
+- archivos que crea o modifica, y la responsabilidad de cada uno;
+- la prueba que demuestra esa tarea, escrita antes que la implementación;
+- el comando que la verifica (`npm test`, `npm run build`, o la prueba más estrecha que cubra el riesgo).
+
+No incluyas tareas de despliegue, migración ni activación de servicios de pago. Esas acciones requieren una autorización distinta y explícita.

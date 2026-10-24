@@ -1,0 +1,28 @@
+---
+description: "Antes de dar por terminado un cambio de LeapSign, al recibir o pedir una revisión, o al cerrar una rama: exigir pruebas ejecutadas, revisar el diff y no integrar ni desplegar sin evidencia. Guía local adaptada de Superpowers; no es el plugin ni una skill nativa."
+alwaysApply: false
+---
+
+# Verificación y cierre de LeapSign
+
+Guía local. No es el plugin Superpowers ni una skill reconocida por Cursor.
+
+Origen: https://github.com/obra/superpowers — revisión `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` (v7.0.1). Copyright (c) 2025 Jesse Vincent. Licencia MIT: `docs/agent-capabilities/licenses/superpowers-MIT-LICENSE.txt`. Texto parafraseado. No afirma que exista un revisor automático de Superpowers.
+
+## Antes de decir que está terminado
+
+Ejecuta en esta sesión la comprobación que corresponde y lee su salida. `npm test` y `npm run build` son el mínimo de un cambio de aplicación o de seguridad. Una interfaz se comprueba además en el flujo afectado. Si la orden no se ejecutó, el resultado es «no verificado», no «aprobado».
+
+Revisa el diff. Cada cambio debe servir a la tarea. Menciona lo que quedó pendiente en lugar de contarlo como hecho.
+
+## Revisión recibida
+
+Lee el comentario entero. Contrástalo con el código. Aplica lo que sea correcto para este repositorio y explica, con el archivo a la vista, lo que no lo sea. No modifiques el código solo para coincidir con el comentario.
+
+## Revisión pedida
+
+Antes de integrar un cambio grande, pide una revisión con el objetivo, los criterios y la lista de archivos. En Cursor puede usarse el subagente `security-review` o `bugbot` solo cuando quien pide el trabajo lo solicita. Esa revisión es de Cursor, no un escaneo de Codex Security.
+
+## Cerrar la rama
+
+La suite relevante tiene que estar en verde. Después se puede integrar por el mecanismo del repositorio. No despliegues ni migres producción como paso de cierre. Si las pruebas fallan, detén el cierre y vuelve a la depuración.

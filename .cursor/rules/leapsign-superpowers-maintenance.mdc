@@ -1,0 +1,15 @@
+---
+alwaysApply: false
+---
+
+# Mantenimiento de Superpowers
+
+Regla manual. Se aplica solo si se menciona `@leapsign-superpowers-maintenance`. No es el plugin Superpowers ni una skill nativa.
+
+Origen de los flujos `writing-skills` y `diagnosing-superpowers`: https://github.com/obra/superpowers — revisión `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` (v7.0.1). Copyright (c) 2025 Jesse Vincent. Licencia MIT: `docs/agent-capabilities/licenses/superpowers-MIT-LICENSE.txt`.
+
+Esos dos flujos dependen del plugin: skills con pruebas de comportamiento, transcripciones de sesión y el formato de skill del arnés. Cursor no los reconoce en este repositorio.
+
+- Para crear instrucciones persistentes aquí, usa una regla `.mdc` en `.cursor/rules` o `AGENTS.md`. No crees una carpeta de skills y la declares reconocida.
+- Para entender una sesión que ignoró una guía, lee la evidencia disponible (diff, salida de pruebas, mensajes) y cita archivo y resultado. No redactes un informe de diagnóstico de Superpowers ni abras un fallo aguas arriba en su nombre.
+- El plugin oficial de Cursor se instala, si se desea, con `/add-plugin superpowers` o desde el marketplace, en un chat de Agent, y exige una sesión nueva. Esa instalación registra un hook `sessionStart` y queda fuera de esta preparación.

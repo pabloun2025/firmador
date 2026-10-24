@@ -1,0 +1,28 @@
+---
+globs: src/**/*.css,src/components/**/*.tsx,src/admin/**/*.tsx,src/main.tsx,index.html,public/**/*
+alwaysApply: false
+---
+
+# Interfaz de LeapSign
+
+Guía local de proyecto. No es una skill nativa de Cursor ni la skill de Codex.
+
+Origen: https://github.com/dobromirdikov/codex-frontend-design-skill — revisión `983119775a936d123df9fbfbc3821bdee5bb58fd`. A su vez deriva de la skill `frontend-design` de `anthropics/claude-plugins-official`, Apache-2.0. Licencia: `docs/agent-capabilities/licenses/frontend-design-APACHE-2.0.txt`.
+
+Este archivo está modificado. La skill de origen pide elegir una estética nueva y evitar la apariencia genérica. Aquí esa instrucción no se aplica: la identidad ya aprobada manda. No rediseñes una pantalla aprobada sin una necesidad funcional demostrada.
+
+## Identidad que se conserva
+
+- La rana que salta de PDF en PDF: `public/frog-brand.webp`, `public/frog-signing.webp`, `public/frog-mark.svg` y `public/frog-favicon.png`. La animación vive en `src/studio.css` (`.signing-leap`, `.signing-frog`) y se detiene con `prefers-reduced-motion`.
+- Colores y tipo ya usados en `src/styles.css`: tinta `--ink`, bosque `--forest`, marfil `--ivory`, oro `--gold`, texto Inter / Avenir Next. Los encabezados editoriales en Georgia están limitados a la propuesta de `src/studio.css` y `docs/design-studio-proposal.md`.
+- Logotipos, textos legales y componentes existentes. El centro de control (`src/admin`) mantiene su diseño salvo una tarea que lo nombre.
+- La propuesta de mesa documental no autoriza cambiar el flujo de firma, el backend ni las cuotas.
+
+## Al cambiar una pantalla
+
+- Reutiliza las clases y variables existentes antes de crear otras.
+- Escritorio y móvil. El documento vigente, las firmas ya hechas y la siguiente acción se distinguen a simple vista.
+- Contraste, foco visible y uso con teclado. El error aparece junto a la acción que lo provocó.
+- Estados de carga, error, éxito y recuperación. Los pasos ya cerrados pueden quedar plegados.
+- Sin formularios duplicados, texto de relleno ni bloques sobredimensionados.
+- Comprueba el flujo en el navegador cuando el cambio se ve o se usa. Una captura estática no basta.
