@@ -88,11 +88,6 @@ async function audit(
 }
 
 const text = (value: unknown, max = 500) => typeof value === "string" ? value.trim().slice(0, max) : "";
-const requireReason = (value: unknown) => {
-  const reason = text(value);
-  if (reason.length < 8) throw new HttpError("Escribe un motivo de al menos 8 caracteres.");
-  return reason;
-};
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (char) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
 }[char]!));
@@ -189,8 +184,7 @@ async function updateSettings(context: AdminContext, payload: Record<string, unk
   const changes: Record<string, boolean | string> = { updated_at: new Date().toISOString() };
   for (const key of allowed) if (typeof payload[key] === "boolean") changes[key] = payload[key] as boolean;
   if (Object.keys(changes).length === 1) throw new HttpError("No hay cambios válidos.");
-  const reason = requireReason(payload.reason);
-  await audit(context, "settings_update_requested", "system", "global", reason, changes);
+  await audit(context, "settings_update_requested", "system", "global", null, changes);
   const { data, error } = await context.db.from("system_settings").update({ ...changes, updated_by: context.user.id }).eq("singleton", true).select().single();
   if (error) throw error;
   return { settings: data };
@@ -202,8 +196,7 @@ async function updateTemplate(context: AdminContext, payload: Record<string, unk
   const subject = text(payload.subject_template, 160);
   const body = text(payload.body_template, 3000);
   if (!subject || !body) throw new HttpError("Completa el asunto y el mensaje.");
-  const reason = requireReason(payload.reason);
-  await audit(context, "template_update_requested", "email_template", key, reason, { enabled: payload.enabled !== false });
+  await audit(context, "template_update_requested", "email_template", key, null, { enabled: payload.enabled !== false });
   const { data, error } = await context.db.from("email_templates").update({
     subject_template: subject,
     body_template: body,
@@ -218,14 +211,11 @@ async function updateTemplate(context: AdminContext, payload: Record<string, unk
 async function accountAction(context: AdminContext, payload: Record<string, unknown>) {
   const userId = text(payload.user_id, 64);
   const action = text(payload.account_action, 30);
-  const reason = requireReason(payload.reason);
   if (!userId || !["disable", "enable", "delete"].includes(action)) throw new HttpError("Acción de cuenta no válida.");
   if (userId === context.user.id) throw new HttpError("No puedes modificar tu propia cuenta desde este panel.");
   const { data: target, error: targetError } = await context.db.auth.admin.getUserById(userId);
   if (targetError || !target.user?.email) throw new HttpError("La cuenta ya no existe.", 404, "NOT_FOUND");
-  if (action === "delete" && text(payload.confirm_email, 320).toLowerCase() !== target.user.email.toLowerCase())
-    throw new HttpError("Escribe el correo completo de la cuenta para confirmar su eliminación.");
-  await audit(context, `account_${action}_requested`, "account", userId, reason, { email: target.user.email });
+  await audit(context, `account_${action}_requested`, "account", userId, null, { email: target.user.email });
   if (action === "disable" || action === "enable") {
     const { error } = await context.db.auth.admin.updateUserById(userId, { ban_duration: action === "disable" ? "876000h" : "none" });
     if (error) throw error;
@@ -246,12 +236,11 @@ async function accountAction(context: AdminContext, payload: Record<string, unkn
 async function workflowAction(context: AdminContext, payload: Record<string, unknown>) {
   const workflowId = text(payload.workflow_id, 64);
   const action = text(payload.workflow_action, 30);
-  const reason = requireReason(payload.reason);
   if (!/^[0-9a-f-]{36}$/i.test(workflowId) || !["pause", "resume", "release_turn", "cancel", "purge"].includes(action))
     throw new HttpError("Acción de proceso no válida.");
   const { data: workflow } = await context.db.from("workflows").select("id,owner_id,title,status").eq("id", workflowId).maybeSingle();
   if (!workflow) throw new HttpError("El proceso ya no existe.", 404, "NOT_FOUND");
-  await audit(context, `workflow_${action}_requested`, "workflow", workflowId, reason, { owner_id: workflow.owner_id, previous_status: workflow.status });
+  await audit(context, `workflow_${action}_requested`, "workflow", workflowId, null, { owner_id: workflow.owner_id, previous_status: workflow.status });
   if (["pause", "resume", "release_turn"].includes(action)) {
     const { data, error } = await context.db.rpc("owner_manage_open_round", {
       p_workflow_id: workflowId,
@@ -283,11 +272,10 @@ async function workflowAction(context: AdminContext, payload: Record<string, unk
   return { ok: true, files_removed: filesRemoved };
 }
 
-async function runCleanup(context: AdminContext, payload: Record<string, unknown>) {
-  const reason = requireReason(payload.reason);
+async function runCleanup(context: AdminContext, _payload: Record<string, unknown>) {
   const { data: settings } = await context.db.from("system_settings").select("automatic_cleanup_enabled").eq("singleton", true).single();
   if (!settings?.automatic_cleanup_enabled) throw new HttpError("El procesamiento de purgas está desactivado.");
-  await audit(context, "cleanup_run_requested", "cleanup", "pending", reason);
+  await audit(context, "cleanup_run_requested", "cleanup", "pending", null);
   const { data: jobs, error } = await context.db.from("file_cleanup_jobs").select("id,storage_path").in("status", ["pending", "failed"]).lte("scheduled_for", new Date().toISOString()).order("scheduled_for").limit(100);
   if (error) throw error;
   let removed = 0;
