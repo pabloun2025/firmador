@@ -8,23 +8,28 @@ const list = (values?: string[]) => (values ?? []).filter((value) => value.trim(
 
 export function signatureHeadline(signatures?: SignatureView | null) {
   if (!signatures?.status) return null;
-  const present = list(signatures.names);
-  const added = list(signatures.addedNames);
+  const names = (signatures.names ?? []).map((value) => value.trim()).filter(Boolean);
+  const added = (signatures.addedNames ?? []).map((value) => value.trim()).filter(Boolean);
+  const present = names.join(", ");
+  const addedText = added.join(", ");
+  const earlier = names.filter((name) => !added.includes(name)).join(", ");
   if (signatures.status === "unreadable") {
-    return { name: "No se pudieron leer las firmas", note: "El documento se aceptó. Ábrelo para revisarlo." };
+    return { label: "Firmas de este PDF", name: "No se pudieron leer", note: "El documento se aceptó. Ábrelo para revisarlo.", caveat: "" };
   }
   if (signatures.status === "no_new_signature") {
     return {
-      name: present || "Sin firma nueva",
-      note: present ? "No hay una firma nueva. Estos nombres ya estaban en el PDF." : "No aparece una firma nueva en este PDF.",
+      label: "Firma nueva",
+      name: "No hay una firma nueva",
+      note: present ? `Estos nombres ya estaban en el PDF: ${present}.` : "No aparece una firma nueva en este PDF.",
+      caveat: "",
     };
   }
   if (signatures.status !== "detected") return null;
   return {
-    name: added || present || "Nombre no disponible",
-    note: present && added && present !== added
-      ? `En el PDF figuran: ${present}.`
-      : "Nombre leído del PDF. LeapSign no certifica la firma.",
+    label: addedText ? (added.length > 1 ? "Las firmas añadidas en esta versión son" : "La última firma añadida es") : "Firmas leídas del PDF",
+    name: addedText || present || "Nombre no disponible",
+    note: earlier ? `También figuran: ${earlier}.` : addedText ? "Es la única firma que aparece en este PDF." : present ? `En el PDF figuran: ${present}.` : "",
+    caveat: "LeapSign lee el nombre del PDF. No certifica la firma.",
   };
 }
 

@@ -67,16 +67,21 @@ describe("signature name reading", () => {
 
   it("writes a readable headline for the current signer", () => {
     expect(signatureHeadline({ status: "detected", names: ["Ana Perez"], addedNames: ["Ana Perez"] })).toEqual({
+      label: "La última firma añadida es",
       name: "Ana Perez",
-      note: "Nombre leído del PDF. LeapSign no certifica la firma.",
+      note: "Es la única firma que aparece en este PDF.",
+      caveat: "LeapSign lee el nombre del PDF. No certifica la firma.",
     });
     expect(signatureHeadline({ status: "detected", names: ["Ana Perez", "Luis Mora"], addedNames: ["Luis Mora"] })).toEqual({
+      label: "La última firma añadida es",
       name: "Luis Mora",
-      note: "En el PDF figuran: Ana Perez, Luis Mora.",
+      note: "También figuran: Ana Perez.",
+      caveat: "LeapSign lee el nombre del PDF. No certifica la firma.",
     });
-    expect(signatureHeadline({ status: "no_new_signature", names: ["Ana Perez"], addedNames: [] })?.name).toBe("Ana Perez");
-    expect(signatureHeadline({ status: "no_new_signature", names: [], addedNames: [] })?.name).toBe("Sin firma nueva");
-    expect(signatureHeadline({ status: "unreadable" })?.name).toBe("No se pudieron leer las firmas");
+    expect(signatureHeadline({ status: "detected", names: ["Ana Perez", "Luis Mora"], addedNames: ["Ana Perez", "Luis Mora"] })?.label).toBe("Las firmas añadidas en esta versión son");
+    expect(signatureHeadline({ status: "no_new_signature", names: ["Ana Perez"], addedNames: [] })?.name).toBe("No hay una firma nueva");
+    expect(signatureHeadline({ status: "no_new_signature", names: [], addedNames: [] })?.name).toBe("No hay una firma nueva");
+    expect(signatureHeadline({ status: "unreadable" })?.name).toBe("No se pudieron leer");
     expect(signatureHeadline(null)).toBeNull();
   });
 });

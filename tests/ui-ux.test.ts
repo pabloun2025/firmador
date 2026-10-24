@@ -53,13 +53,18 @@ describe("LeapSign task-oriented interface", () => {
 
   it("shows the current signer in large type and previews the PDF before closing", () => {
     const studio = readFileSync("src/studio.css", "utf8");
+    const headlines = readFileSync("src/lib/signature-progress.ts", "utf8");
     expect(app).toContain("Ver PDF");
+    expect(app).toContain('className="signer-label"');
+    expect(headlines).toContain("La última firma añadida es");
+    expect(app).toContain("El proceso sigue abierto.");
+    expect(app).toContain('details className="close-choice"');
     expect(app).toContain("Cerrar firmas con esta versión");
     expect(app).toContain("Ya vi este PDF y quiero dejarlo como versión final");
     expect(app).toContain('className="pdf-preview-dialog"');
     expect(app).toContain("Plazos y conservación");
     expect(app).toContain('details className="history-disclosure"');
-    expect(studio).toContain(".signer-banner strong { display: block; color: #102c25; font-size: 26px;");
+    expect(studio).toContain(".signer-banner strong { display: block; color: #102c25; font-size: 20px;");
   });
 
   it("moves creation through distinct create, share and tracking stages", () => {
